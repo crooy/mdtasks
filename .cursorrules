@@ -1,191 +1,57 @@
 # Cursor Rules for mdtasks Project
 
-## Task Management Rules
-
-### ✅ REQUIRED: Use mdtasks for all task management
-- **NEVER** create TODO comments in code files
-- **NEVER** use GitHub issues for task tracking
-- **ALWAYS** use `mdtasks add` to create new tasks
+## 🚫 CRITICAL: No TODO/FIXME Comments
+- **NEVER** create TODO/FIXME comments in code files
+- **ALWAYS** use `mdtasks add` to create tasks instead
 - **ALWAYS** use `mdtasks start <id>` when beginning work
 - **ALWAYS** use `mdtasks done <id>` when completing work
 
-### 📋 Task Creation Workflow
-1. **Create task**: `mdtasks add "Task description" --priority high --tags feature`
-2. **Start work**: `mdtasks start <id>`
-3. **Complete work**: `mdtasks done <id>`
-4. **Track progress**: `mdtasks list --status active`
-
-### 🚫 Forbidden Patterns
-```rust
-// ❌ DON'T DO THIS - Use mdtasks instead
-// TODO: Implement authentication
-// FIXME: Fix the bug in user service
-// HACK: Temporary workaround
-
-// ✅ DO THIS INSTEAD
-// Create task: mdtasks add "Implement authentication" --priority high --tags auth
-// Create task: mdtasks add "Fix user service bug" --priority high --tags bug
-```
-
-### 📊 Required Commands Before Starting Work
+## 🔧 Pre-Commit Requirements
+**MANDATORY** before every commit:
 ```bash
-# Check current tasks
-mdtasks list
-
-# Start working on a task
-mdtasks start <id>
-
-# Check what you're working on
-mdtasks list --status active
+cargo fmt                    # Format code
+cargo clippy -- -D warnings # Check for warnings/errors
 ```
 
-### 📊 Required Commands After Completing Work
-```bash
-# Mark task as done
-mdtasks done <id>
+## 📋 Task Management Workflow
+1. **Create**: `mdtasks add "Description" --priority high --tags feature`
+2. **Start**: `mdtasks start <id>`
+3. **Work**: Implement feature/fix
+4. **Complete**: `mdtasks done <id>`
+5. **Commit**: `git commit -m "feat: description (task #X)"`
 
-# Verify completion
-mdtasks list --status done
-```
-
-## Code Quality Rules
-
-### Rust Standards
-- Use `cargo fmt` before committing
-- Use `cargo clippy` to check for warnings
-- Add proper error handling with `anyhow::Result`
-- Use descriptive variable names
+## 🎯 Code Quality Standards
+- Use `anyhow::Result` for error handling
 - Add doc comments for public functions
+- Use descriptive variable names
+- Follow clap derive patterns for CLI
+- Use consistent emoji feedback (✅, 🚀, ❌)
 
-### CLI Design Standards
-- Use clap derive macros for argument parsing
-- Provide helpful error messages
-- Use consistent emoji for user feedback (✅, 🚀, ❌)
-- Follow the pattern: `mdtasks <command> <args>`
-
-### File Organization
-- Keep all task files in `tasks/` directory
-- Use consistent naming: `{id}-{kebab-case-title}.md`
-- Maintain YAML front-matter structure
-- Preserve markdown content when updating tasks
-
-## Git Workflow Rules
-
-### Commit Messages
+## 📝 Commit Message Format
 - Use conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`
-- Include task ID in commit message when applicable
-- Example: `feat: implement start command (task #4)`
+- Include task ID: `feat: implement start command (task #4)`
+- No generic messages like "wip", "fixes", "updates"
 
-### Branch Naming
-- Use task-based branches: `task-{id}-{description}`
-- Example: `task-005-implement-edit-command`
+## 🚀 Development Setup
+- Use `nix develop` for environment
+- Install globally: `cargo install --path .`
+- Test commands manually before committing
 
-### Pre-commit Checks
-```bash
-# Before committing, run:
-cargo fmt
-cargo clippy
-mdtasks list --status active  # Ensure no active tasks are forgotten
-```
-
-## Development Environment
-
-### Required Setup
-- Use `nix develop` for development environment
-- Install mdtasks globally: `cargo install --path .`
-- Configure editor to recognize `.md` task files
-
-### Testing Requirements
-- Test all new commands manually
-- Verify task file format after updates
-- Test filtering and status changes
-- Ensure error handling works correctly
-
-## Task Priority Guidelines
-
-### High Priority
-- Core functionality (add, list, show, done, start)
-- Bug fixes
-- Security issues
-
-### Medium Priority
-- Quality of life improvements
-- Configuration options
-- Additional commands
-
-### Low Priority
-- Nice-to-have features
-- Advanced integrations
-- Performance optimizations
-
-## Documentation Requirements
-
-### README Updates
-- Update README.md when adding new commands
-- Include usage examples
-- Update feature list
-
-### Task Documentation
-- Each task should have clear acceptance criteria
-- Include implementation notes
-- Document any dependencies
-
-## Enforcement
-
-### Code Review Checklist
-- [ ] No TODO/FIXME comments in code
-- [ ] All work tracked in mdtasks
-- [ ] Proper task lifecycle (start → done)
-- [ ] Commit messages follow conventions
-- [ ] Code formatted and linted
-
-### Daily Workflow
-1. `mdtasks list` - Check current tasks
-2. `mdtasks start <id>` - Begin work
-3. Implement feature/fix
-4. `mdtasks done <id>` - Complete work
-5. Commit with proper message
-6. `mdtasks list --status done` - Verify completion
-
-## Examples
-
-### ✅ Good Task Management
-```bash
-# Creating a new feature
-mdtasks add "Add configuration file support" --priority medium --tags config
-
-# Starting work
-mdtasks start 6
-
-# Working on the feature...
-# (implement code)
-
-# Completing work
-mdtasks done 6
-```
-
-### ❌ Bad Task Management
+## ❌ Forbidden Patterns
 ```rust
 // DON'T DO THIS
-fn main() {
-    // TODO: Add error handling
-    // FIXME: This is broken
-    println!("Hello world");
-}
+// TODO: Implement authentication
+// FIXME: Fix the bug
+// HACK: Temporary workaround
+
+// DO THIS INSTEAD
+// mdtasks add "Implement authentication" --priority high --tags auth
 ```
 
-### ✅ Good Commit Messages
-```
-feat: implement start command (task #4)
-fix: handle missing task files gracefully (task #12)
-docs: update README with new commands
-refactor: extract common task update logic
-```
-
-### ❌ Bad Commit Messages
-```
-wip
-fixes
-updates
-changes
-```
+## ✅ Daily Workflow
+1. `mdtasks list` - Check current tasks
+2. `mdtasks start <id>` - Begin work
+3. Implement feature
+4. `cargo fmt && cargo clippy` - Format and lint
+5. `mdtasks done <id>` - Complete work
+6. `git commit -m "feat: description (task #X)"` - Commit
