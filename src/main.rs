@@ -5,6 +5,26 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use walkdir::WalkDir;
 
+#[derive(Debug, Serialize, Deserialize)]
+struct Config {
+    git: GitConfig,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct GitConfig {
+    branch_prefix: String,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            git: GitConfig {
+                branch_prefix: "feature/".to_string(),
+            },
+        }
+    }
+}
+
 #[derive(Parser)]
 #[command(name = "mdtasks")]
 #[command(about = "Markdown task manager")]
@@ -156,8 +176,15 @@ struct TaskFile {
     content: String,
 }
 
+fn load_config() -> Result<Config> {
+    // For now, just return default config
+    // TODO: Load from config file when we implement that feature
+    Ok(Config::default())
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    let config = load_config()?;
 
     match cli.command {
         Commands::List {
@@ -209,13 +236,13 @@ fn main() -> Result<()> {
             add_task_note(id, note)?;
         }
         Commands::GitStart { id } => {
-            git_start_branch(id)?;
+            git_start_branch(id, &config)?;
         }
         Commands::GitFinish { message } => {
-            git_finish_branch(message)?;
+            git_finish_branch(message, &config)?;
         }
         Commands::GitStatus => {
-            git_status()?;
+            git_status(&config)?;
         }
     }
 
@@ -1166,7 +1193,7 @@ fn add_note_to_content(content: &str, note: &str) -> String {
 
     result
 }
-fn git_start_branch(task_id: String) -> Result<()> {
+fn git_start_branch(task_id: String, config: &Config) -> Result<()> {
     // First, check if we're in a git repository
     if !is_git_repo()? {
         return Err(anyhow::anyhow!("Not in a git repository"));
@@ -1200,7 +1227,8 @@ fn git_start_branch(task_id: String) -> Result<()> {
 
     // Create branch name from task
     let branch_name = format!(
-        "task-{}-{}",
+        "{}{}-{}",
+        config.git.branch_prefix,
         task_id,
         task.task
             .title
@@ -1240,7 +1268,7 @@ fn git_start_branch(task_id: String) -> Result<()> {
     Ok(())
 }
 
-fn git_finish_branch(message: Option<String>) -> Result<()> {
+fn git_finish_branch(message: Option<String>, config: &Config) -> Result<()> {
     // Check if we're in a git repository
     if !is_git_repo()? {
         return Err(anyhow::anyhow!("Not in a git repository"));
@@ -1249,7 +1277,7 @@ fn git_finish_branch(message: Option<String>) -> Result<()> {
     let current_branch = get_current_branch()?;
 
     // Check if we're on a task branch
-    if !current_branch.starts_with("task-") {
+    if !current_branch.starts_with(&config.git.branch_prefix) {
         return Err(anyhow::anyhow!(
             "Not on a task branch. Current branch: {}",
             current_branch
@@ -1258,8 +1286,10 @@ fn git_finish_branch(message: Option<String>) -> Result<()> {
 
     // Get task ID from branch name
     let task_id = current_branch
+        .strip_prefix(&config.git.branch_prefix)
+        .ok_or_else(|| anyhow::anyhow!("Invalid task branch format"))?
         .split('-')
-        .nth(1)
+        .next()
         .ok_or_else(|| anyhow::anyhow!("Invalid task branch format"))?;
 
     // Get task details
@@ -1307,7 +1337,7 @@ fn git_finish_branch(message: Option<String>) -> Result<()> {
     Ok(())
 }
 
-fn git_status() -> Result<()> {
+fn git_status(config: &Config) -> Result<()> {
     // Check if we're in a git repository
     if !is_git_repo()? {
         return Err(anyhow::anyhow!("Not in a git repository"));
@@ -1316,9 +1346,9 @@ fn git_status() -> Result<()> {
     let current_branch = get_current_branch()?;
     println!("🌿 Current branch: {}", current_branch);
 
-    if current_branch.starts_with("task-") {
+    if current_branch.starts_with(&config.git.branch_prefix) {
         // Extract task ID from branch name
-        if let Some(task_id) = current_branch.split('-').nth(1) {
+        if let Some(task_id) = current_branch.strip_prefix(&config.git.branch_prefix).and_then(|s| s.split('-').next()) {
             // Try to get task details
             if let Ok(tasks) = load_tasks() {
                 if let Some(task) = tasks.into_iter().find(|tf| tf.task.id == task_id) {
