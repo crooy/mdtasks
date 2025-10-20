@@ -1,5 +1,8 @@
 # mdtasks
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
+
 A command-line task manager that uses markdown files for task storage.
 
 ## Features
@@ -9,6 +12,29 @@ A command-line task manager that uses markdown files for task storage.
 - ✅ **Filtering**: Filter tasks by status, priority, and tags
 - ✅ **Markdown Storage**: Tasks stored as readable markdown files
 - ✅ **Git Integration**: Version control your tasks with git
+
+## Quick Start
+
+```bash
+# Install mdtasks
+curl -sSL https://raw.githubusercontent.com/yourusername/mdtasks/main/install | bash
+
+# Create your first task
+mdtasks add "Learn mdtasks" --priority high
+
+# Start working on it
+mdtasks start 1
+
+# Add some subtasks
+mdtasks checklist 1 "Read the documentation"
+mdtasks checklist 1 "Try the examples"
+
+# View your progress
+mdtasks subtasks 1
+
+# Mark as complete
+mdtasks done 1
+```
 
 ## Installation
 
