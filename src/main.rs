@@ -1321,21 +1321,9 @@ fn git_finish_branch(message: Option<String>, config: &Config) -> Result<()> {
     run_git_command(&["add", "."])?;
     run_git_command(&["commit", "-m", &commit_msg])?;
 
-    // Switch to main
-    println!("🔄 Switching to main branch...");
-    run_git_command(&["checkout", "main"])?;
-
-    // Merge the task branch
-    println!("🔀 Merging branch '{}' into main...", current_branch);
-    run_git_command(&["merge", "--no-ff", &current_branch])?;
-
-    // Delete the task branch
-    println!("🗑️ Deleting task branch '{}'...", current_branch);
-    run_git_command(&["branch", "-d", &current_branch])?;
-
-    // Push changes to remote
-    println!("🚀 Pushing changes to remote...");
-    run_git_command(&["push", "origin", "main"])?;
+    // Push the task branch to remote
+    println!("🚀 Pushing task branch to remote...");
+    run_git_command(&["push", "origin", &current_branch])?;
 
     println!(
         "🎉 Successfully finished task {}: {}",
