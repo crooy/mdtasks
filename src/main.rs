@@ -121,6 +121,18 @@ enum Commands {
         /// Note to add
         note: String,
     },
+    /// Start Git branch for task
+    GitStart {
+        /// Task ID to create branch for
+        id: String,
+    },
+    /// Finish Git branch and merge to main
+    GitFinish {
+        /// Optional commit message (defaults to task title)
+        message: Option<String>,
+    },
+    /// Show Git status and current task
+    GitStatus,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -195,6 +207,15 @@ fn main() -> Result<()> {
         }
         Commands::AddNote { id, note } => {
             add_task_note(id, note)?;
+        }
+        Commands::GitStart { id } => {
+            git_start_branch(id)?;
+        }
+        Commands::GitFinish { message } => {
+            git_finish_branch(message)?;
+        }
+        Commands::GitStatus => {
+            git_status()?;
         }
     }
 
@@ -1144,4 +1165,243 @@ fn add_note_to_content(content: &str, note: &str) -> String {
     }
 
     result
+}
+fn git_start_branch(task_id: String) -> Result<()> {
+    // First, check if we're in a git repository
+    if !is_git_repo()? {
+        return Err(anyhow::anyhow!("Not in a git repository"));
+    }
+
+    // Get the task details
+    let tasks = load_tasks()?;
+    let task = tasks
+        .into_iter()
+        .find(|tf| tf.task.id == task_id)
+        .context(format!("Task with ID '{}' not found", task_id))?;
+
+    // Check if we're on main branch
+    let current_branch = get_current_branch()?;
+    if current_branch != "main" {
+        return Err(anyhow::anyhow!(
+            "Must be on main branch to start a task branch. Current branch: {}",
+            current_branch
+        ));
+    }
+
+    // Check if there are unstaged changes and warn
+    let has_unstaged = has_uncommitted_changes()?;
+    if has_unstaged {
+        println!("⚠️  Warning: You have unstaged changes that will be auto-stashed and restored");
+    }
+
+    // Pull latest changes from main with auto-stash (keeps changes)
+    println!("🔄 Pulling latest changes from main...");
+    run_git_command(&["pull", "--rebase", "--autostash", "origin", "main"])?;
+
+    // Create branch name from task
+    let branch_name = format!(
+        "task-{}-{}",
+        task_id,
+        task.task
+            .title
+            .to_lowercase()
+            .replace(" ", "-")
+            .replace(":", "")
+            .replace(",", "")
+            .replace(".", "")
+            .replace("!", "")
+            .replace("?", "")
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == '-')
+            .collect::<String>()
+    );
+
+    // Check if branch already exists
+    if branch_exists(&branch_name)? {
+        return Err(anyhow::anyhow!("Branch '{}' already exists", branch_name));
+    }
+
+    // Create and checkout new branch
+    println!("🌿 Creating branch: {}", branch_name);
+    run_git_command(&["checkout", "-b", &branch_name])?;
+
+    // Update task status to active if it's pending
+    if task.task.status.as_deref() == Some("pending") {
+        println!("🚀 Marking task {} as active", task_id);
+        run_terminal_cmd_internal(&["mdtasks", "start", &task_id])?;
+    }
+
+    println!(
+        "✅ Started work on task {} in branch '{}'",
+        task_id, branch_name
+    );
+    println!("📝 Task: {}", task.task.title);
+
+    Ok(())
+}
+
+fn git_finish_branch(message: Option<String>) -> Result<()> {
+    // Check if we're in a git repository
+    if !is_git_repo()? {
+        return Err(anyhow::anyhow!("Not in a git repository"));
+    }
+
+    let current_branch = get_current_branch()?;
+
+    // Check if we're on a task branch
+    if !current_branch.starts_with("task-") {
+        return Err(anyhow::anyhow!(
+            "Not on a task branch. Current branch: {}",
+            current_branch
+        ));
+    }
+
+    // Get task ID from branch name
+    let task_id = current_branch
+        .split('-')
+        .nth(1)
+        .ok_or_else(|| anyhow::anyhow!("Invalid task branch format"))?;
+
+    // Get task details
+    let tasks = load_tasks()?;
+    let task = tasks
+        .into_iter()
+        .find(|tf| tf.task.id == task_id)
+        .context(format!("Task with ID '{}' not found", task_id))?;
+
+    // Note: We'll handle uncommitted changes by committing them
+
+    // Commit message
+    let commit_msg =
+        message.unwrap_or_else(|| format!("feat: {} (task #{})", task.task.title, task_id));
+
+    // Add all changes and commit (only if there are changes)
+    if has_uncommitted_changes()? {
+        println!("📝 Committing changes...");
+        run_git_command(&["add", "."])?;
+        run_git_command(&["commit", "-m", &commit_msg])?;
+    } else {
+        println!("📝 No changes to commit");
+    }
+
+    // Switch to main
+    println!("🔄 Switching to main branch...");
+    run_git_command(&["checkout", "main"])?;
+
+    // Merge the task branch
+    println!("🔀 Merging branch '{}' into main...", current_branch);
+    run_git_command(&["merge", "--no-ff", &current_branch])?;
+
+    // Delete the task branch
+    println!("🗑️ Deleting task branch '{}'...", current_branch);
+    run_git_command(&["branch", "-d", &current_branch])?;
+
+    // Mark task as done
+    println!("✅ Marking task {} as done", task_id);
+    run_terminal_cmd_internal(&["mdtasks", "done", task_id])?;
+
+    // Push changes to remote
+    println!("🚀 Pushing changes to remote...");
+    run_git_command(&["push", "origin", "main"])?;
+
+    println!(
+        "🎉 Successfully finished task {}: {}",
+        task_id, task.task.title
+    );
+    println!("✅ Changes pushed to remote repository");
+
+    Ok(())
+}
+
+fn git_status() -> Result<()> {
+    // Check if we're in a git repository
+    if !is_git_repo()? {
+        return Err(anyhow::anyhow!("Not in a git repository"));
+    }
+
+    let current_branch = get_current_branch()?;
+    println!("🌿 Current branch: {}", current_branch);
+
+    if current_branch.starts_with("task-") {
+        // Extract task ID from branch name
+        if let Some(task_id) = current_branch.split('-').nth(1) {
+            // Try to get task details
+            if let Ok(tasks) = load_tasks() {
+                if let Some(task) = tasks.into_iter().find(|tf| tf.task.id == task_id) {
+                    println!("📋 Current task: {} - {}", task_id, task.task.title);
+                    println!(
+                        "📊 Status: {}",
+                        task.task.status.as_deref().unwrap_or("unknown")
+                    );
+                    println!(
+                        "⭐ Priority: {}",
+                        task.task.priority.as_deref().unwrap_or("none")
+                    );
+                } else {
+                    println!("⚠️ Task {} not found in tasks directory", task_id);
+                }
+            }
+        }
+    } else {
+        println!("📋 No active task branch");
+    }
+
+    // Show git status
+    println!("\n📊 Git status:");
+    run_git_command(&["status", "--short"])?;
+
+    Ok(())
+}
+
+// Helper functions
+
+fn is_git_repo() -> Result<bool> {
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .output()
+        .context("Failed to run git command")?;
+
+    Ok(output.status.success())
+}
+
+fn get_current_branch() -> Result<String> {
+    let output = run_git_command(&["branch", "--show-current"])?;
+    Ok(output.trim().to_string())
+}
+
+fn branch_exists(branch_name: &str) -> Result<bool> {
+    let output = run_git_command(&["branch", "--list", branch_name])?;
+    Ok(!output.trim().is_empty())
+}
+
+fn has_uncommitted_changes() -> Result<bool> {
+    let output = run_git_command(&["status", "--porcelain"])?;
+    Ok(!output.trim().is_empty())
+}
+
+fn run_git_command(args: &[&str]) -> Result<String> {
+    let output = std::process::Command::new("git")
+        .args(args)
+        .output()
+        .context(format!("Failed to run git command: git {}", args.join(" ")))?;
+
+    if !output.status.success() {
+        let error_msg = String::from_utf8_lossy(&output.stderr);
+        return Err(anyhow::anyhow!("Git command failed: {}", error_msg));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+fn run_terminal_cmd_internal(args: &[&str]) -> Result<()> {
+    let status = std::process::Command::new(args[0])
+        .args(&args[1..])
+        .status()
+        .context(format!("Failed to run command: {}", args.join(" ")))?;
+
+    if !status.success() {
+        return Err(anyhow::anyhow!("Command failed: {}", args.join(" ")));
+    }
+
+    Ok(())
 }
