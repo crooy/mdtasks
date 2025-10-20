@@ -24,15 +24,73 @@ fi
 TEMP_DIR=$(mktemp -d)
 cd "$TEMP_DIR"
 
-# Clone repository
-echo "📥 Cloning mdtasks repository..."
-git clone https://github.com/yourusername/mdtasks.git
-cd mdtasks
+# Get the latest release
+echo "📥 Getting latest mdtasks release..."
+LATEST_RELEASE=$(curl -s https://api.github.com/repos/yourusername/mdtasks/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 
-# Run installer
-echo "🔧 Running installer..."
-chmod +x scripts/install.sh
-./scripts/install.sh
+if [ -z "$LATEST_RELEASE" ]; then
+    echo "❌ Could not determine latest release. Falling back to source installation..."
+    # Fallback to source installation
+    git clone https://github.com/yourusername/mdtasks.git
+    cd mdtasks
+    chmod +x scripts/install.sh
+    ./scripts/install.sh
+else
+    echo "📦 Installing mdtasks $LATEST_RELEASE..."
+    
+    # Detect OS and architecture
+    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+    ARCH=$(uname -m)
+    
+    case $OS in
+        linux)
+            case $ARCH in
+                x86_64) ARCH="x86_64" ;;
+                aarch64) ARCH="aarch64" ;;
+                *) echo "❌ Unsupported Linux architecture: $ARCH"; exit 1 ;;
+            esac
+            ;;
+        darwin)
+            case $ARCH in
+                x86_64) ARCH="x86_64" ;;
+                arm64) ARCH="aarch64" ;;
+                *) echo "❌ Unsupported macOS architecture: $ARCH"; exit 1 ;;
+            esac
+            ;;
+        *)
+            echo "❌ Unsupported operating system: $OS"
+            echo "Please install manually from: https://github.com/yourusername/mdtasks/releases"
+            exit 1
+            ;;
+    esac
+    
+    # Download and install
+    DOWNLOAD_URL="https://github.com/yourusername/mdtasks/releases/download/$LATEST_RELEASE/mdtasks-${OS}-${ARCH}.tar.gz"
+    echo "📥 Downloading from: $DOWNLOAD_URL"
+    
+    curl -L -o mdtasks.tar.gz "$DOWNLOAD_URL"
+    tar -xzf mdtasks.tar.gz
+    
+    # Install
+    echo "🔧 Installing mdtasks..."
+    if [[ "$OS" == "darwin" ]]; then
+        # On macOS, try to install to /usr/local/bin first, fallback to ~/.local/bin
+        if sudo mv mdtasks /usr/local/bin/ 2>/dev/null; then
+            echo "✅ Installed to /usr/local/bin/mdtasks"
+        else
+            mkdir -p ~/.local/bin
+            mv mdtasks ~/.local/bin/
+            echo "✅ Installed to ~/.local/bin/mdtasks"
+            echo "Add ~/.local/bin to your PATH if it's not already there"
+        fi
+    else
+        # On Linux, install to /usr/local/bin
+        sudo mv mdtasks /usr/local/bin/
+        echo "✅ Installed to /usr/local/bin/mdtasks"
+    fi
+    
+    chmod +x /usr/local/bin/mdtasks 2>/dev/null || chmod +x ~/.local/bin/mdtasks
+fi
 
 # Cleanup
 cd /

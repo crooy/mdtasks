@@ -16,7 +16,7 @@ A command-line task manager that uses markdown files for task storage.
 ## Quick Start
 
 ```bash
-# Install mdtasks
+# Install mdtasks (latest release)
 curl -sSL https://raw.githubusercontent.com/yourusername/mdtasks/main/install | bash
 
 # Create your first task
@@ -61,7 +61,11 @@ mdtasks done 1
 If you have Rust installed:
 
 ```bash
+# Install from GitHub
 cargo install --git https://github.com/yourusername/mdtasks.git
+
+# Or install from crates.io (when published)
+cargo install mdtasks
 ```
 
 ### Option 3: Build from Source
@@ -179,6 +183,27 @@ cargo test
 ```bash
 cargo install --path .
 ```
+
+### Creating a Release
+
+```bash
+# Create a new release (this will trigger GitHub Actions)
+./scripts/release.sh v0.2.0
+```
+
+The release script will:
+- Update version numbers
+- Create a git tag
+- Push to GitHub
+- Trigger automated builds for Linux and macOS
+- Create GitHub release with installers
+
+### CI/CD
+
+This project uses GitHub Actions for:
+- **CI**: Automated testing on Linux, macOS, and Windows
+- **Release**: Automated building and packaging for releases
+- **Cross-platform**: Builds for Linux x86_64, macOS x86_64, and macOS ARM64
 
 ## Contributing
 

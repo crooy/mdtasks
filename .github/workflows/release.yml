@@ -1,0 +1,362 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        default: 'v0.1.0'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: mdtasks-linux-x86_64
+            file_extension: ''
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: mdtasks-macos-x86_64
+            file_extension: ''
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: mdtasks-macos-aarch64
+            file_extension: ''
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Strip binary (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: strip target/${{ matrix.target }}/release/mdtasks
+
+      - name: Strip binary (macOS)
+        if: matrix.os == 'macos-latest'
+        run: strip target/${{ matrix.target }}/release/mdtasks
+
+      - name: Create archive
+        run: |
+          cd target/${{ matrix.target }}/release
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            7z a ../../${{ matrix.artifact_name }}.zip mdtasks.exe
+          else
+            tar -czf ../../${{ matrix.artifact_name }}.tar.gz mdtasks
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: target/${{ matrix.artifact_name }}.tar.gz
+
+  create-installers:
+    name: Create installers
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Create Linux installer
+        run: |
+          mkdir -p dist/linux
+          cp artifacts/mdtasks-linux-x86_64/mdtasks-linux-x86_64.tar.gz dist/linux/
+          
+          # Create a simple install script for Linux
+          cat > dist/linux/install.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          echo "🚀 Installing mdtasks for Linux..."
+          
+          # Detect architecture
+          ARCH=$(uname -m)
+          case $ARCH in
+            x86_64) ARCH="x86_64" ;;
+            aarch64) ARCH="aarch64" ;;
+            *) echo "❌ Unsupported architecture: $ARCH"; exit 1 ;;
+          esac
+          
+          # Create temp directory
+          TEMP_DIR=$(mktemp -d)
+          cd "$TEMP_DIR"
+          
+          # Download and extract
+          echo "📥 Downloading mdtasks..."
+          curl -L -o mdtasks.tar.gz "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mdtasks-linux-${ARCH}.tar.gz"
+          tar -xzf mdtasks.tar.gz
+          
+          # Install
+          echo "🔧 Installing mdtasks..."
+          sudo mv mdtasks /usr/local/bin/
+          chmod +x /usr/local/bin/mdtasks
+          
+          # Cleanup
+          cd /
+          rm -rf "$TEMP_DIR"
+          
+          echo "✅ mdtasks installed successfully!"
+          echo "Run 'mdtasks --help' to get started."
+          EOF
+          
+          chmod +x dist/linux/install.sh
+
+      - name: Create macOS installer
+        run: |
+          mkdir -p dist/macos
+          cp artifacts/mdtasks-macos-x86_64/mdtasks-macos-x86_64.tar.gz dist/macos/
+          cp artifacts/mdtasks-macos-aarch64/mdtasks-macos-aarch64.tar.gz dist/macos/
+          
+          # Create a universal install script for macOS
+          cat > dist/macos/install.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          echo "🚀 Installing mdtasks for macOS..."
+          
+          # Detect architecture
+          ARCH=$(uname -m)
+          case $ARCH in
+            x86_64) ARCH="x86_64" ;;
+            arm64) ARCH="aarch64" ;;
+            *) echo "❌ Unsupported architecture: $ARCH"; exit 1 ;;
+          esac
+          
+          # Create temp directory
+          TEMP_DIR=$(mktemp -d)
+          cd "$TEMP_DIR"
+          
+          # Download and extract
+          echo "📥 Downloading mdtasks..."
+          curl -L -o mdtasks.tar.gz "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mdtasks-macos-${ARCH}.tar.gz"
+          tar -xzf mdtasks.tar.gz
+          
+          # Install
+          echo "🔧 Installing mdtasks..."
+          sudo mv mdtasks /usr/local/bin/
+          chmod +x /usr/local/bin/mdtasks
+          
+          # Cleanup
+          cd /
+          rm -rf "$TEMP_DIR"
+          
+          echo "✅ mdtasks installed successfully!"
+          echo "Run 'mdtasks --help' to get started."
+          EOF
+          
+          chmod +x dist/macos/install.sh
+
+      - name: Create universal installer
+        run: |
+          mkdir -p dist/universal
+          
+          # Create a universal installer that detects OS and architecture
+          cat > dist/universal/install.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          echo "🚀 Installing mdtasks..."
+          
+          # Detect OS and architecture
+          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+          ARCH=$(uname -m)
+          
+          case $OS in
+            linux)
+              case $ARCH in
+                x86_64) ARCH="x86_64" ;;
+                aarch64) ARCH="aarch64" ;;
+                *) echo "❌ Unsupported Linux architecture: $ARCH"; exit 1 ;;
+              esac
+              ;;
+            darwin)
+              case $ARCH in
+                x86_64) ARCH="x86_64" ;;
+                arm64) ARCH="aarch64" ;;
+                *) echo "❌ Unsupported macOS architecture: $ARCH"; exit 1 ;;
+              esac
+              ;;
+            *)
+              echo "❌ Unsupported operating system: $OS"
+              echo "Please install manually from: https://github.com/${{ github.repository }}/releases"
+              exit 1
+              ;;
+          esac
+          
+          # Create temp directory
+          TEMP_DIR=$(mktemp -d)
+          cd "$TEMP_DIR"
+          
+          # Download and extract
+          echo "📥 Downloading mdtasks for $OS-$ARCH..."
+          curl -L -o mdtasks.tar.gz "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/mdtasks-${OS}-${ARCH}.tar.gz"
+          tar -xzf mdtasks.tar.gz
+          
+          # Install
+          echo "🔧 Installing mdtasks..."
+          if [[ "$OS" == "darwin" ]]; then
+            # On macOS, try to install to /usr/local/bin first, fallback to ~/.local/bin
+            if sudo mv mdtasks /usr/local/bin/ 2>/dev/null; then
+              echo "✅ Installed to /usr/local/bin/mdtasks"
+            else
+              mkdir -p ~/.local/bin
+              mv mdtasks ~/.local/bin/
+              echo "✅ Installed to ~/.local/bin/mdtasks"
+              echo "Add ~/.local/bin to your PATH if it's not already there"
+            fi
+          else
+            # On Linux, install to /usr/local/bin
+            sudo mv mdtasks /usr/local/bin/
+            echo "✅ Installed to /usr/local/bin/mdtasks"
+          fi
+          
+          chmod +x /usr/local/bin/mdtasks 2>/dev/null || chmod +x ~/.local/bin/mdtasks
+          
+          # Cleanup
+          cd /
+          rm -rf "$TEMP_DIR"
+          
+          echo "✅ mdtasks installed successfully!"
+          echo "Run 'mdtasks --help' to get started."
+          EOF
+          
+          chmod +x dist/universal/install.sh
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers
+          path: dist/
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build, create-installers]
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Download installer artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: installers
+          path: ./dist
+
+      - name: Create release archive
+        run: |
+          mkdir -p release
+          
+          # Copy all binaries
+          cp artifacts/mdtasks-linux-x86_64/mdtasks-linux-x86_64.tar.gz release/
+          cp artifacts/mdtasks-macos-x86_64/mdtasks-macos-x86_64.tar.gz release/
+          cp artifacts/mdtasks-macos-aarch64/mdtasks-macos-aarch64.tar.gz release/
+          
+          # Copy installers
+          cp -r dist/* release/
+          
+          # Create a comprehensive README for the release
+          cat > release/README.md << 'EOF'
+          # mdtasks ${{ github.ref_name }}
+          
+          ## Quick Install
+          
+          ### Universal Installer (Recommended)
+          ```bash
+          curl -sSL https://raw.githubusercontent.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/install.sh | bash
+          ```
+          
+          ### Platform-Specific Installers
+          
+          **Linux:**
+          ```bash
+          curl -sSL https://raw.githubusercontent.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/linux/install.sh | bash
+          ```
+          
+          **macOS:**
+          ```bash
+          curl -sSL https://raw.githubusercontent.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/macos/install.sh | bash
+          ```
+          
+          ## Manual Installation
+          
+          Download the appropriate archive for your platform and extract the `mdtasks` binary to a directory in your PATH.
+          
+          ## What's New
+          
+          See the [changelog](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+          EOF
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            release/*
+          body: |
+            ## 🚀 mdtasks ${{ github.ref_name }}
+            
+            ### Quick Install
+            ```bash
+            curl -sSL https://raw.githubusercontent.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/install.sh | bash
+            ```
+            
+            ### What's New
+            - Cross-platform builds for Linux and macOS
+            - Universal installer with automatic OS/architecture detection
+            - Improved installation experience
+            
+            ### Downloads
+            - **Linux x86_64**: `mdtasks-linux-x86_64.tar.gz`
+            - **macOS x86_64**: `mdtasks-macos-x86_64.tar.gz`
+            - **macOS ARM64**: `mdtasks-macos-aarch64.tar.gz`
+            
+            ### Installation Scripts
+            - **Universal**: `install.sh` (auto-detects OS and architecture)
+            - **Linux**: `linux/install.sh`
+            - **macOS**: `macos/install.sh`
+            
+            See the [README](https://github.com/${{ github.repository }}) for full documentation.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
