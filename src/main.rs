@@ -1269,20 +1269,18 @@ fn git_finish_branch(message: Option<String>) -> Result<()> {
         .find(|tf| tf.task.id == task_id)
         .context(format!("Task with ID '{}' not found", task_id))?;
 
-    // Note: We'll handle uncommitted changes by committing them
+    // Mark task as done first (so the task file update gets committed)
+    println!("✅ Marking task {} as done", task_id);
+    run_terminal_cmd_internal(&["mdtasks", "done", task_id])?;
 
     // Commit message
     let commit_msg =
         message.unwrap_or_else(|| format!("feat: {} (task #{})", task.task.title, task_id));
 
-    // Add all changes and commit (only if there are changes)
-    if has_uncommitted_changes()? {
-        println!("📝 Committing changes...");
-        run_git_command(&["add", "."])?;
-        run_git_command(&["commit", "-m", &commit_msg])?;
-    } else {
-        println!("📝 No changes to commit");
-    }
+    // Add all changes and commit (including the task file update)
+    println!("📝 Committing changes...");
+    run_git_command(&["add", "."])?;
+    run_git_command(&["commit", "-m", &commit_msg])?;
 
     // Switch to main
     println!("🔄 Switching to main branch...");
@@ -1295,10 +1293,6 @@ fn git_finish_branch(message: Option<String>) -> Result<()> {
     // Delete the task branch
     println!("🗑️ Deleting task branch '{}'...", current_branch);
     run_git_command(&["branch", "-d", &current_branch])?;
-
-    // Mark task as done
-    println!("✅ Marking task {} as done", task_id);
-    run_terminal_cmd_internal(&["mdtasks", "done", task_id])?;
 
     // Push changes to remote
     println!("🚀 Pushing changes to remote...");
