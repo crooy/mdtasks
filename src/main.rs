@@ -69,6 +69,23 @@ enum Commands {
         /// Task ID to mark as done
         id: String,
     },
+    /// Mark a task as started/active
+    Start {
+        /// Task ID to mark as started
+        id: String,
+    },
+    /// Add an item to a task's checklist
+    Checklist {
+        /// Task ID to add checklist item to
+        id: String,
+        /// Checklist item to add
+        item: String,
+    },
+    /// List subtasks (checklist items) for a task
+    Subtasks {
+        /// Task ID to list subtasks for
+        id: String,
+    },
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -113,6 +130,15 @@ fn main() -> Result<()> {
         }
         Commands::Done { id } => {
             mark_task_done(id)?;
+        }
+        Commands::Start { id } => {
+            mark_task_start(id)?;
+        }
+        Commands::Checklist { id, item } => {
+            add_checklist_item(id, item)?;
+        }
+        Commands::Subtasks { id } => {
+            list_subtasks(id)?;
         }
     }
 
@@ -527,8 +553,9 @@ fn mark_task_done(id: String) -> Result<()> {
 
         new_content.push_str("---\n\n");
 
-        // Add the original markdown content
-        new_content.push_str(&parsed.content);
+        // Process the markdown content to mark all checklist items as complete
+        let processed_content = mark_all_subtasks_complete(&parsed.content);
+        new_content.push_str(&processed_content);
 
         // Write the updated file
         std::fs::write(&task_file.file_path, new_content)
@@ -537,6 +564,264 @@ fn mark_task_done(id: String) -> Result<()> {
         println!("✅ Marked task {} as done: {}", id, task.title);
     } else {
         return Err(anyhow::anyhow!("Could not parse front-matter from task file"));
+    }
+
+    Ok(())
+}
+
+fn mark_task_start(id: String) -> Result<()> {
+    // Find the task file
+    let tasks = load_tasks()?;
+    let task_file = tasks
+        .into_iter()
+        .find(|tf| tf.task.id == id)
+        .context(format!("Task with ID '{}' not found", id))?;
+
+    // Read the current file content
+    let content = std::fs::read_to_string(&task_file.file_path)
+        .context(format!("Failed to read task file: {}", task_file.file_path))?;
+
+    // Parse the front-matter and content
+    let matter = Matter::<gray_matter::engine::YAML>::new();
+    let parsed = matter.parse(&content);
+
+    if let Some(front_matter) = parsed.data {
+        // Extract the task data
+        let mut task = extract_task_from_pod(&front_matter)?;
+
+        // Update the status to "active"
+        task.status = Some("active".to_string());
+
+        // Rebuild the file content
+        let mut new_content = String::new();
+
+        // Add updated front-matter
+        new_content.push_str("---\n");
+        new_content.push_str(&format!("id: {}\n", task.id));
+        new_content.push_str(&format!("title: \"{}\"\n", task.title));
+
+        if let Some(ref status) = task.status {
+            new_content.push_str(&format!("status: {}\n", status));
+        }
+
+        if let Some(ref priority) = task.priority {
+            new_content.push_str(&format!("priority: {}\n", priority));
+        }
+
+        if let Some(ref tags) = task.tags {
+            new_content.push_str("tags: [");
+            for (i, tag) in tags.iter().enumerate() {
+                if i > 0 {
+                    new_content.push_str(", ");
+                }
+                new_content.push_str(&format!("\"{}\"", tag));
+            }
+            new_content.push_str("]\n");
+        }
+
+        if let Some(ref project) = task.project {
+            new_content.push_str(&format!("project: {}\n", project));
+        }
+
+        if let Some(ref created) = task.created {
+            new_content.push_str(&format!("created: {}\n", created));
+        }
+
+        if let Some(ref due) = task.due {
+            new_content.push_str(&format!("due: {}\n", due));
+        }
+
+        // Add started date
+        new_content.push_str(&format!("started: {}\n", chrono::Utc::now().format("%Y-%m-%d")));
+
+        new_content.push_str("---\n\n");
+
+        // Add the original markdown content
+        new_content.push_str(&parsed.content);
+
+        // Write the updated file
+        std::fs::write(&task_file.file_path, new_content)
+            .context(format!("Failed to write updated task file: {}", task_file.file_path))?;
+
+        println!("🚀 Started task {}: {}", id, task.title);
+    } else {
+        return Err(anyhow::anyhow!("Could not parse front-matter from task file"));
+    }
+
+    Ok(())
+}
+
+fn add_checklist_item(id: String, item: String) -> Result<()> {
+    // Find the task file
+    let tasks = load_tasks()?;
+    let task_file = tasks
+        .into_iter()
+        .find(|tf| tf.task.id == id)
+        .context(format!("Task with ID '{}' not found", id))?;
+
+    // Read the current file content
+    let content = std::fs::read_to_string(&task_file.file_path)
+        .context(format!("Failed to read task file: {}", task_file.file_path))?;
+
+    // Parse the front-matter and content
+    let matter = Matter::<gray_matter::engine::YAML>::new();
+    let parsed = matter.parse(&content);
+
+    if let Some(_front_matter) = parsed.data {
+        // Rebuild the content with the checklist item added
+        let mut new_content = String::new();
+
+        // Add the front-matter section
+        let lines: Vec<&str> = content.lines().collect();
+        let mut front_matter_end = 0;
+
+        for (i, line) in lines.iter().enumerate() {
+            if i > 0 && line == &"---" {
+                front_matter_end = i;
+                break;
+            }
+        }
+
+        // Add front-matter
+        for i in 0..=front_matter_end {
+            new_content.push_str(&format!("{}\n", lines[i]));
+        }
+
+        // Find the checklist section and add the item
+        let mut in_checklist = false;
+        let mut checklist_added = false;
+
+        for line in parsed.content.lines() {
+            new_content.push_str(&format!("{}\n", line));
+
+            // Check if we're in the checklist section
+            if line.trim().starts_with("## Checklist") {
+                in_checklist = true;
+            } else if in_checklist && line.trim().starts_with("##") && !line.trim().starts_with("###") {
+                // We've moved to the next section, add the item before this line
+                new_content.push_str(&format!("- [ ] {}\n", item));
+                checklist_added = true;
+                in_checklist = false;
+            } else if in_checklist && line.trim().is_empty() && !checklist_added {
+                // Empty line in checklist section, add the item
+                new_content.push_str(&format!("- [ ] {}\n", item));
+                checklist_added = true;
+            }
+        }
+
+        // If we never found a place to add it, add it at the end
+        if !checklist_added {
+            new_content.push_str(&format!("- [ ] {}\n", item));
+        }
+
+        // Write the updated file
+        std::fs::write(&task_file.file_path, new_content)
+            .context(format!("Failed to write updated task file: {}", task_file.file_path))?;
+
+        println!("✅ Added checklist item to task {}: {}", id, item);
+    } else {
+        return Err(anyhow::anyhow!("Could not parse front-matter from task file"));
+    }
+
+    Ok(())
+}
+
+fn mark_all_subtasks_complete(content: &str) -> String {
+    let mut result = String::new();
+    let mut in_checklist = false;
+    
+    for line in content.lines() {
+        // Check if we're entering the checklist section
+        if line.trim().starts_with("## Checklist") {
+            in_checklist = true;
+            result.push_str(line);
+            result.push('\n');
+            continue;
+        }
+        
+        // Check if we're leaving the checklist section
+        if in_checklist && line.trim().starts_with("##") && !line.trim().starts_with("###") {
+            in_checklist = false;
+        }
+        
+        // If we're in the checklist section, mark all items as complete
+        if in_checklist {
+            let trimmed = line.trim();
+            if trimmed.starts_with("- [ ]") {
+                // Replace incomplete checkbox with complete checkbox
+                let item_text = trimmed.strip_prefix("- [ ]").unwrap_or(trimmed).trim();
+                result.push_str(&format!("- [x] {}\n", item_text));
+            } else {
+                result.push_str(line);
+                result.push('\n');
+            }
+        } else {
+            result.push_str(line);
+            result.push('\n');
+        }
+    }
+    
+    result
+}
+
+fn list_subtasks(id: String) -> Result<()> {
+    let tasks = load_tasks()?;
+
+    let task_file = tasks
+        .into_iter()
+        .find(|tf| tf.task.id == id)
+        .context(format!("Task with ID '{}' not found", id))?;
+
+    let content = std::fs::read_to_string(&task_file.file_path)
+        .context(format!("Failed to read task file: {}", task_file.file_path))?;
+
+    let task = &task_file.task;
+
+    println!("📋 Subtasks for task {}: {}", id, task.title);
+    println!();
+
+    // Find and display checklist items
+    let mut in_checklist = false;
+    let mut has_items = false;
+
+    for line in content.lines() {
+        // Check if we're entering the checklist section
+        if line.trim().starts_with("## Checklist") {
+            in_checklist = true;
+            continue;
+        }
+        
+        // Check if we're leaving the checklist section
+        if in_checklist && line.trim().starts_with("##") && !line.trim().starts_with("###") {
+            break;
+        }
+        
+        // If we're in the checklist section, look for checklist items
+        if in_checklist {
+            let trimmed = line.trim();
+            if trimmed.starts_with("- [") {
+                has_items = true;
+                // Extract the item text (remove the checkbox part)
+                let item_text = if trimmed.starts_with("- [x]") || trimmed.starts_with("- [X]") {
+                    // Completed item
+                    let text = trimmed.strip_prefix("- [x]").or_else(|| trimmed.strip_prefix("- [X]"))
+                        .unwrap_or(trimmed).trim();
+                    format!("✅ {}", text)
+                } else if trimmed.starts_with("- [ ]") {
+                    // Incomplete item
+                    let text = trimmed.strip_prefix("- [ ]").unwrap_or(trimmed).trim();
+                    format!("⏳ {}", text)
+                } else {
+                    // Fallback for other formats
+                    trimmed.to_string()
+                };
+                println!("  {}", item_text);
+            }
+        }
+    }
+
+    if !has_items {
+        println!("  No subtasks found.");
     }
 
     Ok(())

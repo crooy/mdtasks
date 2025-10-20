@@ -1,157 +1,158 @@
 # mdtasks
 
-A minimal Rust CLI tool for managing tasks stored in markdown files with front-matter.
+A command-line task manager that uses markdown files for task storage.
 
 ## Features
 
-- **List tasks** with filtering by status, priority, and tags
-- **Show task details** including full markdown content
-- **Front-matter parsing** from YAML metadata
-- **Git-friendly** - all tasks stored as markdown files
-- **Nix development environment** with flake.nix
+- ✅ **Task Management**: Create, list, show, start, and complete tasks
+- ✅ **Subtasks**: Add checklist items and track subtask progress
+- ✅ **Filtering**: Filter tasks by status, priority, and tags
+- ✅ **Markdown Storage**: Tasks stored as readable markdown files
+- ✅ **Git Integration**: Version control your tasks with git
 
 ## Installation
 
-### Using Nix (Recommended)
+### Option 1: Install from Source (Recommended)
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/mdtasks.git
+   cd mdtasks
+   ```
+
+2. Run the installer:
+   ```bash
+   ./scripts/install.sh
+   ```
+
+3. Verify installation:
+   ```bash
+   mdtasks --help
+   ```
+
+### Option 2: Install with Cargo
+
+If you have Rust installed:
 
 ```bash
-# Enter development environment
-nix develop
-
-# Build and run
-cargo run -- list
+cargo install --git https://github.com/yourusername/mdtasks.git
 ```
 
-### Manual Installation
+### Option 3: Build from Source
 
 ```bash
-# Clone and build
-git clone <repository>
+git clone https://github.com/yourusername/mdtasks.git
 cd mdtasks
 cargo build --release
-
-# Install globally (optional)
-cargo install --path .
+# Binary will be in target/release/mdtasks
 ```
 
 ## Usage
 
-### List Tasks
+### Basic Commands
 
 ```bash
 # List all tasks
 mdtasks list
 
-# Filter by status
-mdtasks list --status pending
+# Add a new task
+mdtasks add "Implement new feature" --priority high --tags feature
 
-# Filter by priority
-mdtasks list --priority high
+# Start working on a task
+mdtasks start 1
 
-# Filter by tag
-mdtasks list --tag cli
+# Add subtasks/checklist items
+mdtasks checklist 1 "Write tests"
+mdtasks checklist 1 "Update documentation"
 
-# Combine filters
-mdtasks list --status pending --priority high
+# View subtasks
+mdtasks subtasks 1
+
+# Mark task as done
+mdtasks done 1
+
+# Show task details
+mdtasks show 1
 ```
 
-### Show Task Details
+### Filtering
 
 ```bash
-# Show specific task
-mdtasks show 1
+# List only active tasks
+mdtasks list --status active
+
+# List high priority tasks
+mdtasks list --priority high
+
+# List tasks with specific tag
+mdtasks list --tag feature
 ```
 
 ## Task File Format
 
-Tasks are stored as markdown files with YAML front-matter:
+Tasks are stored as markdown files in the `tasks/` directory with YAML front-matter:
 
 ```markdown
 ---
-id: 001
-title: "Implement MVP of mdtasks"
+id: 1
+title: "Implement new feature"
+status: active
 priority: high
-status: pending
-tags: [cli, rust]
-project: mdtasks-cli
+tags: ["feature", "backend"]
+project: my-project
 created: 2025-10-20
-due: 2025-10-21
+due: 2025-10-25
 ---
 
 # Task Details
 
-## Checklist
-- [ ] basic project setup using rust and flake.nix
-- [ ] read, list, query tasks
-
 ## Notes
-Focus on the minimum we need to have task manager
+This is a detailed description of the task.
+
+## Checklist
+- [ ] Write tests
+- [x] Update documentation
+- [ ] Deploy to staging
 ```
 
-### Front-matter Fields
+## Uninstallation
 
-- `id`: Task identifier (string or number)
-- `title`: Task title (required)
-- `status`: Task status (pending, active, done, etc.)
-- `priority`: Task priority (low, medium, high)
-- `tags`: Array of tags
-- `project`: Project name
-- `created`: Creation date
-- `due`: Due date
+To uninstall mdtasks:
 
-## Project Structure
-
+```bash
+./scripts/install.sh --uninstall
 ```
-mdtasks/
-├── Cargo.toml          # Rust project configuration
-├── flake.nix           # Nix development environment
-├── .gitignore          # Git ignore rules
-├── src/
-│   └── main.rs         # Main CLI application
-└── tasks/              # Task files directory
-    └── 001-mvp.md      # Example task file
+
+Or if installed via cargo:
+
+```bash
+cargo uninstall mdtasks
 ```
 
 ## Development
 
 ### Prerequisites
 
-- Rust toolchain
-- Nix (for development environment)
-
-### Running Tests
-
-```bash
-# Run tests
-cargo test
-
-# Run with output
-cargo test -- --nocapture
-```
+- Rust 1.70+
+- Cargo
 
 ### Building
 
 ```bash
-# Debug build
 cargo build
-
-# Release build
-cargo build --release
-
-# Run directly
-cargo run -- list
 ```
 
-## Future Features
+### Running Tests
 
-- [ ] `mdtasks add` - Create new tasks
-- [ ] `mdtasks done <id>` - Mark tasks as done
-- [ ] `mdtasks note <id>` - Add notes to tasks
-- [ ] Git integration for task tracking
-- [ ] GitHub issues sync
-- [ ] Configuration file support
-- [ ] Multiple task directories
-- [ ] Task templates
+```bash
+cargo test
+```
+
+### Development Installation
+
+```bash
+cargo install --path .
+```
 
 ## Contributing
 

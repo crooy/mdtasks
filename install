@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# One-liner installer for mdtasks
+# Usage: curl -sSL https://raw.githubusercontent.com/yourusername/mdtasks/main/install | bash
+
+set -e
+
+echo "🚀 Installing mdtasks..."
+
+# Check if git is available
+if ! command -v git &> /dev/null; then
+    echo "❌ Git is required but not installed. Please install git first."
+    exit 1
+fi
+
+# Check if cargo is available
+if ! command -v cargo &> /dev/null; then
+    echo "❌ Cargo is required but not installed. Please install Rust first:"
+    echo "   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+    exit 1
+fi
+
+# Create temporary directory
+TEMP_DIR=$(mktemp -d)
+cd "$TEMP_DIR"
+
+# Clone repository
+echo "📥 Cloning mdtasks repository..."
+git clone https://github.com/yourusername/mdtasks.git
+cd mdtasks
+
+# Run installer
+echo "🔧 Running installer..."
+chmod +x scripts/install.sh
+./scripts/install.sh
+
+# Cleanup
+cd /
+rm -rf "$TEMP_DIR"
+
+echo "✅ mdtasks installed successfully!"
+echo "Run 'mdtasks --help' to get started."

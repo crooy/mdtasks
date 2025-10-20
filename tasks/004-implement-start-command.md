@@ -1,11 +1,12 @@
 ---
-id: 004
+id: 4
 title: "Implement start command"
-status: pending
+status: done
 priority: high
 tags: ["cli"]
 project: mdtasks-cli
 created: 2025-10-20
+completed: 2025-10-20
 ---
 
 # Task Details
@@ -15,4 +16,3 @@ Add mdtasks start <id> to mark tasks as active/in-progress
 
 ## Checklist
 - [ ] 
-
