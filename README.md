@@ -3,7 +3,14 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
 
-A command-line task manager that uses markdown files for task storage.
+A **Git-powered, Markdown-based Task Manager** that produces **human-readable, AI-friendly, and Git-web-UI-compatible** task files.
+
+Perfect for developers who want their tasks to be:
+- 🤖 **LLM/AI-friendly**: Works seamlessly with Cursor AI, GitHub Copilot, ChatGPT, and other coding agents
+- 🌐 **Git web UI compatible**: Beautiful rendering in GitHub, GitLab, Bitbucket, and other Git platforms
+- 👥 **Human-readable**: Easy to read, edit, and collaborate on without special tools
+- 📝 **Version controlled**: Full Git history, branching, and merge conflict resolution
+- 🔍 **Searchable**: Find tasks with standard text search tools (`grep`, `ripgrep`, etc.)
 
 ## Features
 
@@ -17,7 +24,7 @@ A command-line task manager that uses markdown files for task storage.
 
 ```bash
 # Install mdtasks (latest release)
-curl -sSL https://raw.githubusercontent.com/yourusername/mdtasks/main/install | bash
+curl -sSL https://raw.githubusercontent.com/crooy/mdtasks/main/install | bash
 
 # Create your first task
 mdtasks add "Learn mdtasks" --priority high
@@ -42,7 +49,7 @@ mdtasks done 1
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/mdtasks.git
+   git clone https://github.com/crooy/mdtasks.git
    cd mdtasks
    ```
 
@@ -62,7 +69,7 @@ If you have Rust installed:
 
 ```bash
 # Install from GitHub
-cargo install --git https://github.com/yourusername/mdtasks.git
+cargo install --git https://github.com/crooy/mdtasks.git
 
 # Or install from crates.io (when published)
 cargo install mdtasks
@@ -71,7 +78,7 @@ cargo install mdtasks
 ### Option 3: Build from Source
 
 ```bash
-git clone https://github.com/yourusername/mdtasks.git
+git clone https://github.com/crooy/mdtasks.git
 cd mdtasks
 cargo build --release
 # Binary will be in target/release/mdtasks
@@ -118,18 +125,38 @@ mdtasks list --priority high
 mdtasks list --tag feature
 ```
 
-## Task File Format
+## Why Markdown-Based Tasks?
 
-Tasks are stored as markdown files in the `tasks/` directory with YAML front-matter:
+### 🤖 **Perfect for LLM Coding Agents**
+
+Your tasks are stored in plain markdown files that AI assistants can easily read and understand:
+
+- **Cursor AI**: Can read your task files directly and help implement features
+- **GitHub Copilot**: Understands task context when working on related code
+- **ChatGPT/Claude**: Can analyze your task list and provide suggestions
+- **Custom AI tools**: Easy to parse and process with any AI system
+
+### 🌐 **Beautiful Git Web UI Rendering**
+
+Your tasks look great in any Git web interface:
+
+- **GitHub**: Tasks display with proper markdown formatting, checkboxes, and syntax highlighting
+- **GitLab**: Full markdown support with task metadata visible
+- **Bitbucket**: Clean, readable task display
+- **Self-hosted Git**: Works with Gitea, Forgejo, and other Git platforms
+
+### 📝 **Human-Friendly Format**
+
+No special tools required - anyone can read and edit your tasks:
 
 ```markdown
 ---
 id: 1
-title: "Implement new feature"
+title: "Implement user authentication"
 status: active
 priority: high
-tags: ["feature", "backend"]
-project: my-project
+tags: ["backend", "security"]
+project: my-app
 created: 2025-10-20
 due: 2025-10-25
 ---
@@ -137,13 +164,31 @@ due: 2025-10-25
 # Task Details
 
 ## Notes
-This is a detailed description of the task.
+Add JWT-based authentication with proper security measures.
 
 ## Checklist
-- [ ] Write tests
-- [x] Update documentation
-- [ ] Deploy to staging
+- [ ] Design authentication flow
+- [x] Set up JWT library
+- [ ] Implement login endpoint
+- [ ] Add password hashing
+- [ ] Write authentication tests
 ```
+
+## Integration Examples
+
+### With Cursor AI
+```bash
+# Cursor AI can read your tasks and help implement them
+mdtasks list --status active
+# Cursor AI: "I see you have 3 active tasks. Let me help implement the authentication system..."
+```
+
+### With Git Web UI
+When you push your tasks to GitHub, they automatically render beautifully:
+- ✅ Checkboxes show progress visually
+- 📊 Metadata is clearly displayed
+- 🔍 Full-text search works across all tasks
+- 📝 Easy to edit directly in the web interface
 
 ## Uninstallation
 
