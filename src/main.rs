@@ -153,6 +153,12 @@ enum Commands {
     },
     /// Show Git status and current task
     GitStatus,
+    /// Clean up done tasks (delete task files)
+    Cleanup {
+        /// Confirm cleanup without prompting
+        #[arg(short, long)]
+        yes: bool,
+    },
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -243,6 +249,9 @@ fn main() -> Result<()> {
         }
         Commands::GitStatus => {
             git_status(&config)?;
+        }
+        Commands::Cleanup { yes } => {
+            cleanup_done_tasks(yes)?;
         }
     }
 
@@ -1430,5 +1439,50 @@ fn run_terminal_cmd_internal(args: &[&str]) -> Result<()> {
         return Err(anyhow::anyhow!("Command failed: {}", args.join(" ")));
     }
 
+    Ok(())
+}
+
+fn cleanup_done_tasks(yes: bool) -> Result<()> {
+    let tasks = load_tasks()?;
+    let done_tasks: Vec<_> = tasks
+        .into_iter()
+        .filter(|task_file| task_file.task.status.as_deref() == Some("done"))
+        .collect();
+
+    if done_tasks.is_empty() {
+        println!("✅ No done tasks to clean up");
+        return Ok(());
+    }
+
+    println!("🗑️  Found {} done task(s) to clean up:", done_tasks.len());
+    for task_file in &done_tasks {
+        println!("  - {}: {}", task_file.task.id, task_file.task.title);
+    }
+
+    if !yes {
+        print!("❓ Are you sure you want to delete these task files? (y/N): ");
+        use std::io::{self, Write};
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+
+        if !input.trim().to_lowercase().starts_with('y') {
+            println!("❌ Cleanup cancelled");
+            return Ok(());
+        }
+    }
+
+    let mut deleted_count = 0;
+    for task_file in done_tasks {
+        if let Err(e) = std::fs::remove_file(&task_file.file_path) {
+            eprintln!("⚠️  Failed to delete {}: {}", task_file.file_path, e);
+        } else {
+            println!("🗑️  Deleted: {}", task_file.file_path);
+            deleted_count += 1;
+        }
+    }
+
+    println!("✅ Cleaned up {} done task(s)", deleted_count);
     Ok(())
 }

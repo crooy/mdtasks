@@ -40,10 +40,7 @@ jobs:
         run: cargo test --verbose
 
       - name: Run clippy
-        uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: -- -D warnings
+        run: cargo clippy -- -D warnings
 
       - name: Check formatting
         run: cargo fmt -- --check
