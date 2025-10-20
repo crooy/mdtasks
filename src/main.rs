@@ -1269,21 +1269,20 @@ fn git_finish_branch(message: Option<String>) -> Result<()> {
         .find(|tf| tf.task.id == task_id)
         .context(format!("Task with ID '{}' not found", task_id))?;
 
-    // Check if there are uncommitted changes
-    if has_uncommitted_changes()? {
-        return Err(anyhow::anyhow!(
-            "There are uncommitted changes. Please commit or stash them first."
-        ));
-    }
+    // Note: We'll handle uncommitted changes by committing them
 
     // Commit message
     let commit_msg =
         message.unwrap_or_else(|| format!("feat: {} (task #{})", task.task.title, task_id));
 
-    // Add all changes and commit
-    println!("📝 Committing changes...");
-    run_git_command(&["add", "."])?;
-    run_git_command(&["commit", "-m", &commit_msg])?;
+    // Add all changes and commit (only if there are changes)
+    if has_uncommitted_changes()? {
+        println!("📝 Committing changes...");
+        run_git_command(&["add", "."])?;
+        run_git_command(&["commit", "-m", &commit_msg])?;
+    } else {
+        println!("📝 No changes to commit");
+    }
 
     // Switch to main
     println!("🔄 Switching to main branch...");
@@ -1301,11 +1300,15 @@ fn git_finish_branch(message: Option<String>) -> Result<()> {
     println!("✅ Marking task {} as done", task_id);
     run_terminal_cmd_internal(&["mdtasks", "done", task_id])?;
 
+    // Push changes to remote
+    println!("🚀 Pushing changes to remote...");
+    run_git_command(&["push", "origin", "main"])?;
+
     println!(
         "🎉 Successfully finished task {}: {}",
         task_id, task.task.title
     );
-    println!("💡 Run 'git push origin main' to push changes to remote");
+    println!("✅ Changes pushed to remote repository");
 
     Ok(())
 }
