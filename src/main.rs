@@ -1348,7 +1348,10 @@ fn git_status(config: &Config) -> Result<()> {
 
     if current_branch.starts_with(&config.git.branch_prefix) {
         // Extract task ID from branch name
-        if let Some(task_id) = current_branch.strip_prefix(&config.git.branch_prefix).and_then(|s| s.split('-').next()) {
+        if let Some(task_id) = current_branch
+            .strip_prefix(&config.git.branch_prefix)
+            .and_then(|s| s.split('-').next())
+        {
             // Try to get task details
             if let Ok(tasks) = load_tasks() {
                 if let Some(task) = tasks.into_iter().find(|tf| tf.task.id == task_id) {
