@@ -4,5 +4,5 @@ pr_enabled = true
 pr_draft = false
 pr_auto_assign = true
 pr_switch_to_main = false
-pr_default_reviewers = ["crooy", "cursor"]
+# pr_default_reviewers = ["crooy", "cursor"]  # Uncomment if reviewers exist in repo
 # pr_default_labels = ["enhancement"]  # Uncomment if labels exist in repo
