@@ -971,25 +971,34 @@ fn toggle_subtask_status(id: String, index: usize, complete: bool) -> Result<()>
 
 fn update_subtask_status(content: &str, target_index: usize, complete: bool) -> String {
     let mut result = String::new();
-    let mut in_subtasks = false;
     let mut current_index = 0;
 
-    for line in content.lines() {
+    // Find the subtask section (preferring Subtasks over Checklist)
+    let (_section_name, section_start) = match find_subtask_section(content) {
+        Some((name, start)) => (name, start),
+        None => {
+            // No subtask section found, return original content
+            return content.to_string();
+        }
+    };
+
+    for (i, line) in content.lines().enumerate() {
         // Check if we're entering the subtasks section
-        if line.trim().starts_with("## Subtasks") {
-            in_subtasks = true;
+        if i == section_start {
             result.push_str(line);
             result.push('\n');
             continue;
         }
 
         // Check if we're leaving the subtasks section
-        if in_subtasks && line.trim().starts_with("##") && !line.trim().starts_with("###") {
-            in_subtasks = false;
+        if i > section_start && is_leaving_subtask_section(line) {
+            result.push_str(line);
+            result.push('\n');
+            continue;
         }
 
         // If we're in the subtasks section, look for subtask items
-        if in_subtasks {
+        if i > section_start && !is_leaving_subtask_section(line) {
             let trimmed = line.trim();
             if trimmed.starts_with("- [") {
                 current_index += 1;
@@ -1063,20 +1072,37 @@ fn add_subtask(id: String, item: String) -> Result<()> {
             new_content.push_str(&format!("{}\n", line));
         }
 
+        // Find the subtask section (preferring Subtasks over Checklist)
+        let (_section_name, section_start) = match find_subtask_section(&parsed.content) {
+            Some((name, start)) => (name, start),
+            None => {
+                // If no subtask section exists, add one at the end
+                new_content.push_str(&parsed.content);
+                new_content.push_str("\n## Subtasks\n\n");
+                new_content.push_str(&format!("- [ ] {}\n", item));
+
+                // Write the updated file
+                std::fs::write(&task_file.file_path, new_content).context(format!(
+                    "Failed to write updated task file: {}",
+                    task_file.file_path
+                ))?;
+
+                println!("✅ Added subtask to task {}: {}", id, item);
+                return Ok(());
+            }
+        };
+
         // Find the subtasks section and add the item
         let mut in_subtasks = false;
         let mut subtask_added = false;
 
-        for line in parsed.content.lines() {
+        for (i, line) in parsed.content.lines().enumerate() {
             new_content.push_str(&format!("{}\n", line));
 
             // Check if we're in the subtasks section
-            if line.trim().starts_with("## Subtasks") {
+            if i == section_start {
                 in_subtasks = true;
-            } else if in_subtasks
-                && line.trim().starts_with("##")
-                && !line.trim().starts_with("###")
-            {
+            } else if in_subtasks && is_leaving_subtask_section(line) {
                 // We've moved to the next section, add the item before this line
                 new_content.push_str(&format!("- [ ] {}\n", item));
                 subtask_added = true;
@@ -1111,24 +1137,33 @@ fn add_subtask(id: String, item: String) -> Result<()> {
 
 fn mark_all_subtasks_complete(content: &str) -> String {
     let mut result = String::new();
-    let mut in_subtasks = false;
 
-    for line in content.lines() {
+    // Find the subtask section (preferring Subtasks over Checklist)
+    let (_section_name, section_start) = match find_subtask_section(content) {
+        Some((name, start)) => (name, start),
+        None => {
+            // No subtask section found, return original content
+            return content.to_string();
+        }
+    };
+
+    for (i, line) in content.lines().enumerate() {
         // Check if we're entering the subtasks section
-        if line.trim().starts_with("## Subtasks") {
-            in_subtasks = true;
+        if i == section_start {
             result.push_str(line);
             result.push('\n');
             continue;
         }
 
         // Check if we're leaving the subtasks section
-        if in_subtasks && line.trim().starts_with("##") && !line.trim().starts_with("###") {
-            in_subtasks = false;
+        if i > section_start && is_leaving_subtask_section(line) {
+            result.push_str(line);
+            result.push('\n');
+            continue;
         }
 
         // If we're in the subtasks section, mark all items as complete
-        if in_subtasks {
+        if i > section_start && !is_leaving_subtask_section(line) {
             let trimmed = line.trim();
             if trimmed.starts_with("- [ ]") {
                 // Replace incomplete checkbox with complete checkbox
@@ -1147,6 +1182,36 @@ fn mark_all_subtasks_complete(content: &str) -> String {
     result
 }
 
+/// Find the subtask section in content, preferring "## Subtasks" over "## Checklist"
+fn find_subtask_section(content: &str) -> Option<(&str, usize)> {
+    let lines: Vec<&str> = content.lines().collect();
+    let mut subtasks_start = None;
+    let mut checklist_start = None;
+
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("## Subtasks") {
+            subtasks_start = Some(i);
+            break; // Prefer Subtasks over Checklist
+        } else if trimmed.starts_with("## Checklist") && checklist_start.is_none() {
+            checklist_start = Some(i);
+        }
+    }
+
+    // Return Subtasks if found, otherwise Checklist
+    if let Some(start) = subtasks_start {
+        Some(("## Subtasks", start))
+    } else {
+        checklist_start.map(|start| ("## Checklist", start))
+    }
+}
+
+/// Check if we're leaving a subtask section
+fn is_leaving_subtask_section(line: &str) -> bool {
+    let trimmed = line.trim();
+    trimmed.starts_with("##") && !trimmed.starts_with("###")
+}
+
 fn list_subtasks(id: String) -> Result<()> {
     let tasks = load_tasks()?;
 
@@ -1163,19 +1228,28 @@ fn list_subtasks(id: String) -> Result<()> {
     println!("📋 Subtasks for task {}: {}", id, task.title);
     println!();
 
+    // Find the subtask section (preferring Subtasks over Checklist)
+    let (_section_name, section_start) = match find_subtask_section(&content) {
+        Some((name, start)) => (name, start),
+        None => {
+            println!("  No subtasks section found.");
+            return Ok(());
+        }
+    };
+
     // Find and display subtask items
     let mut in_subtasks = false;
     let mut has_items = false;
 
-    for line in content.lines() {
+    for (i, line) in content.lines().enumerate() {
         // Check if we're entering the subtasks section
-        if line.trim().starts_with("## Subtasks") {
+        if i == section_start {
             in_subtasks = true;
             continue;
         }
 
         // Check if we're leaving the subtasks section
-        if in_subtasks && line.trim().starts_with("##") && !line.trim().starts_with("###") {
+        if in_subtasks && is_leaving_subtask_section(line) {
             break;
         }
 

@@ -7,7 +7,6 @@ tags: ["templates"]
 project: mdtasks-cli
 created: 2025-10-20
 ---
-
 # Task Details
 
 ## Notes
@@ -15,4 +14,4 @@ Create task templates for common task types (bug-report, feature-request, etc.)
 
 ## Checklist
 - [ ] 
-
+- [ ] Create template for bug reports
