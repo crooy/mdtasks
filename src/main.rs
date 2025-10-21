@@ -47,6 +47,36 @@ struct Cli {
 }
 
 #[derive(Subcommand)]
+enum SubtaskAction {
+    /// Add a subtask to a task
+    Add {
+        /// Task ID to add subtask to
+        id: String,
+        /// Subtask description
+        item: String,
+    },
+    /// List all subtasks for a task
+    List {
+        /// Task ID to list subtasks for
+        id: String,
+    },
+    /// Mark a subtask as complete
+    Complete {
+        /// Task ID
+        id: String,
+        /// Subtask index (1-based)
+        index: usize,
+    },
+    /// Mark a subtask as incomplete
+    Incomplete {
+        /// Task ID
+        id: String,
+        /// Subtask index (1-based)
+        index: usize,
+    },
+}
+
+#[derive(Subcommand)]
 enum Commands {
     /// List tasks
     List {
@@ -106,17 +136,10 @@ enum Commands {
         /// Task ID to mark as started
         id: String,
     },
-    /// Add an item to a task's checklist
-    Checklist {
-        /// Task ID to add checklist item to
-        id: String,
-        /// Checklist item to add
-        item: String,
-    },
-    /// List subtasks (checklist items) for a task
+    /// Manage subtasks for a task
     Subtasks {
-        /// Task ID to list subtasks for
-        id: String,
+        #[command(subcommand)]
+        action: SubtaskAction,
     },
     /// Set task title
     SetTitle {
@@ -281,12 +304,20 @@ fn main() -> Result<()> {
         Commands::Start { id } => {
             mark_task_start(id)?;
         }
-        Commands::Checklist { id, item } => {
-            add_checklist_item(id, item)?;
-        }
-        Commands::Subtasks { id } => {
-            list_subtasks(id)?;
-        }
+        Commands::Subtasks { action } => match action {
+            SubtaskAction::Add { id, item } => {
+                add_subtask(id, item)?;
+            }
+            SubtaskAction::List { id } => {
+                list_subtasks(id)?;
+            }
+            SubtaskAction::Complete { id, index } => {
+                complete_subtask(id, index)?;
+            }
+            SubtaskAction::Incomplete { id, index } => {
+                incomplete_subtask(id, index)?;
+            }
+        },
         Commands::SetTitle { id, title } => {
             set_task_field(id, "title", title)?;
         }
@@ -653,7 +684,7 @@ fn add_task(
         content.push_str(&format!("{}\n\n", notes));
     }
 
-    content.push_str("## Checklist\n");
+    content.push_str("## Subtasks\n");
     content.push('\n');
 
     // Create filename
@@ -873,7 +904,130 @@ fn mark_task_start(id: String) -> Result<()> {
     Ok(())
 }
 
-fn add_checklist_item(id: String, item: String) -> Result<()> {
+fn complete_subtask(id: String, index: usize) -> Result<()> {
+    toggle_subtask_status(id, index, true)
+}
+
+fn incomplete_subtask(id: String, index: usize) -> Result<()> {
+    toggle_subtask_status(id, index, false)
+}
+
+fn toggle_subtask_status(id: String, index: usize, complete: bool) -> Result<()> {
+    // Find the task file
+    let tasks = load_tasks()?;
+    let task_file = tasks
+        .into_iter()
+        .find(|tf| tf.task.id == id)
+        .context(format!("Task with ID '{}' not found", id))?;
+
+    // Read the current file content
+    let content = std::fs::read_to_string(&task_file.file_path)
+        .context(format!("Failed to read task file: {}", task_file.file_path))?;
+
+    // Parse the front-matter and content
+    let matter = Matter::<gray_matter::engine::YAML>::new();
+    let parsed = matter.parse(&content);
+
+    if let Some(_front_matter) = parsed.data {
+        // Rebuild the content with the subtask status updated
+        let mut new_content = String::new();
+
+        // Add the front-matter section
+        let lines: Vec<&str> = content.lines().collect();
+        let mut front_matter_end = 0;
+
+        for (i, line) in lines.iter().enumerate() {
+            if i > 0 && line == &"---" {
+                front_matter_end = i;
+                break;
+            }
+        }
+
+        // Add front-matter
+        for line in lines.iter().take(front_matter_end + 1) {
+            new_content.push_str(&format!("{}\n", line));
+        }
+
+        // Process the content to update the specific subtask
+        let processed_content = update_subtask_status(&parsed.content, index, complete);
+        new_content.push_str(&processed_content);
+
+        // Write the updated file
+        std::fs::write(&task_file.file_path, new_content).context(format!(
+            "Failed to write updated task file: {}",
+            task_file.file_path
+        ))?;
+
+        let status = if complete { "completed" } else { "incomplete" };
+        println!("✅ Marked subtask #{} as {} for task {}", index, status, id);
+    } else {
+        return Err(anyhow::anyhow!(
+            "Could not parse front-matter from task file"
+        ));
+    }
+
+    Ok(())
+}
+
+fn update_subtask_status(content: &str, target_index: usize, complete: bool) -> String {
+    let mut result = String::new();
+    let mut in_subtasks = false;
+    let mut current_index = 0;
+
+    for line in content.lines() {
+        // Check if we're entering the subtasks section
+        if line.trim().starts_with("## Subtasks") {
+            in_subtasks = true;
+            result.push_str(line);
+            result.push('\n');
+            continue;
+        }
+
+        // Check if we're leaving the subtasks section
+        if in_subtasks && line.trim().starts_with("##") && !line.trim().starts_with("###") {
+            in_subtasks = false;
+        }
+
+        // If we're in the subtasks section, look for subtask items
+        if in_subtasks {
+            let trimmed = line.trim();
+            if trimmed.starts_with("- [") {
+                current_index += 1;
+                if current_index == target_index {
+                    // This is the subtask we want to update
+                    let item_text = if trimmed.starts_with("- [x]") || trimmed.starts_with("- [X]")
+                    {
+                        trimmed
+                            .strip_prefix("- [x]")
+                            .or_else(|| trimmed.strip_prefix("- [X]"))
+                            .unwrap_or(trimmed)
+                            .trim()
+                    } else if trimmed.starts_with("- [ ]") {
+                        trimmed.strip_prefix("- [ ]").unwrap_or(trimmed).trim()
+                    } else {
+                        trimmed
+                    };
+
+                    let new_checkbox = if complete { "- [x]" } else { "- [ ]" };
+                    result.push_str(&format!("{} {}\n", new_checkbox, item_text));
+                } else {
+                    result.push_str(line);
+                    result.push('\n');
+                }
+            } else {
+                result.push_str(line);
+                result.push('\n');
+            }
+        } else {
+            result.push_str(line);
+            result.push('\n');
+        }
+    }
+
+    result
+}
+
+fn add_subtask(id: String, item: String) -> Result<()> {
     // Find the task file
     let tasks = load_tasks()?;
     let task_file = tasks
@@ -909,33 +1063,33 @@ fn add_checklist_item(id: String, item: String) -> Result<()> {
             new_content.push_str(&format!("{}\n", line));
         }
 
-        // Find the checklist section and add the item
-        let mut in_checklist = false;
-        let mut checklist_added = false;
+        // Find the subtasks section and add the item
+        let mut in_subtasks = false;
+        let mut subtask_added = false;
 
         for line in parsed.content.lines() {
             new_content.push_str(&format!("{}\n", line));
 
-            // Check if we're in the checklist section
-            if line.trim().starts_with("## Checklist") {
-                in_checklist = true;
-            } else if in_checklist
+            // Check if we're in the subtasks section
+            if line.trim().starts_with("## Subtasks") {
+                in_subtasks = true;
+            } else if in_subtasks
                 && line.trim().starts_with("##")
                 && !line.trim().starts_with("###")
             {
                 // We've moved to the next section, add the item before this line
                 new_content.push_str(&format!("- [ ] {}\n", item));
-                checklist_added = true;
-                in_checklist = false;
-            } else if in_checklist && line.trim().is_empty() && !checklist_added {
-                // Empty line in checklist section, add the item
+                subtask_added = true;
+                in_subtasks = false;
+            } else if in_subtasks && line.trim().is_empty() && !subtask_added {
+                // Empty line in subtasks section, add the item
                 new_content.push_str(&format!("- [ ] {}\n", item));
-                checklist_added = true;
+                subtask_added = true;
             }
         }
 
         // If we never found a place to add it, add it at the end
-        if !checklist_added {
+        if !subtask_added {
             new_content.push_str(&format!("- [ ] {}\n", item));
         }
 
@@ -945,7 +1099,7 @@ fn add_checklist_item(id: String, item: String) -> Result<()> {
             task_file.file_path
         ))?;
 
-        println!("✅ Added checklist item to task {}: {}", id, item);
+        println!("✅ Added subtask to task {}: {}", id, item);
     } else {
         return Err(anyhow::anyhow!(
             "Could not parse front-matter from task file"
@@ -957,24 +1111,24 @@ fn add_checklist_item(id: String, item: String) -> Result<()> {
 
 fn mark_all_subtasks_complete(content: &str) -> String {
     let mut result = String::new();
-    let mut in_checklist = false;
+    let mut in_subtasks = false;
 
     for line in content.lines() {
-        // Check if we're entering the checklist section
-        if line.trim().starts_with("## Checklist") {
-            in_checklist = true;
+        // Check if we're entering the subtasks section
+        if line.trim().starts_with("## Subtasks") {
+            in_subtasks = true;
             result.push_str(line);
             result.push('\n');
             continue;
         }
 
-        // Check if we're leaving the checklist section
-        if in_checklist && line.trim().starts_with("##") && !line.trim().starts_with("###") {
-            in_checklist = false;
+        // Check if we're leaving the subtasks section
+        if in_subtasks && line.trim().starts_with("##") && !line.trim().starts_with("###") {
+            in_subtasks = false;
         }
 
-        // If we're in the checklist section, mark all items as complete
-        if in_checklist {
+        // If we're in the subtasks section, mark all items as complete
+        if in_subtasks {
             let trimmed = line.trim();
             if trimmed.starts_with("- [ ]") {
                 // Replace incomplete checkbox with complete checkbox
@@ -1009,24 +1163,24 @@ fn list_subtasks(id: String) -> Result<()> {
     println!("📋 Subtasks for task {}: {}", id, task.title);
     println!();
 
-    // Find and display checklist items
-    let mut in_checklist = false;
+    // Find and display subtask items
+    let mut in_subtasks = false;
     let mut has_items = false;
 
     for line in content.lines() {
-        // Check if we're entering the checklist section
-        if line.trim().starts_with("## Checklist") {
-            in_checklist = true;
+        // Check if we're entering the subtasks section
+        if line.trim().starts_with("## Subtasks") {
+            in_subtasks = true;
             continue;
         }
 
-        // Check if we're leaving the checklist section
-        if in_checklist && line.trim().starts_with("##") && !line.trim().starts_with("###") {
+        // Check if we're leaving the subtasks section
+        if in_subtasks && line.trim().starts_with("##") && !line.trim().starts_with("###") {
             break;
         }
 
-        // If we're in the checklist section, look for checklist items
-        if in_checklist {
+        // If we're in the subtasks section, look for subtask items
+        if in_subtasks {
             let trimmed = line.trim();
             if trimmed.starts_with("- [") {
                 has_items = true;
