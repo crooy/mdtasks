@@ -21,3 +21,5 @@ serde_yaml = "0.9"
 anyhow = "1.0"
 walkdir = "2.3"  # Directory walking
 chrono = { version = "0.4", features = ["serde"] }
+toml = "0.8"  # TOML config file parsing
+shellexpand = "3.0"  # Path expansion with ~

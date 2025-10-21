@@ -191,6 +191,12 @@ enum Commands {
         #[arg(short, long)]
         yes: bool,
     },
+    /// Initialize configuration file
+    ConfigInit {
+        /// Path to create config file (default: ./mdtasks.toml)
+        #[arg(short, long)]
+        path: Option<String>,
+    },
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -215,8 +221,31 @@ struct TaskFile {
 }
 
 fn load_config() -> Result<Config> {
-    // For now, just return default config
-    // TODO: Load from config file when we implement that feature
+    // Look for config file in current directory or home directory
+    let config_paths = [
+        "./mdtasks.toml",
+        "./.mdtasks.toml",
+        "~/.config/mdtasks/config.toml",
+        "~/.mdtasks.toml",
+    ];
+
+    for path_str in &config_paths {
+        let expanded_path = shellexpand::tilde(path_str).to_string();
+        let path = Path::new(&expanded_path);
+
+        if path.exists() {
+            let content = std::fs::read_to_string(path)
+                .context(format!("Failed to read config file: {}", path.display()))?;
+
+            let config: Config = toml::from_str(&content)
+                .context(format!("Failed to parse config file: {}", path.display()))?;
+
+            println!("📁 Loaded config from: {}", path.display());
+            return Ok(config);
+        }
+    }
+
+    // Return default config if no config file found
     Ok(Config::default())
 }
 
@@ -282,15 +311,26 @@ fn main() -> Result<()> {
             draft,
             reviewers,
             labels,
-            switch_to_main
+            switch_to_main,
         } => {
-            git_done_branch(message, no_pr, draft, reviewers, labels, switch_to_main, &config)?;
+            git_done_branch(
+                message,
+                no_pr,
+                draft,
+                reviewers,
+                labels,
+                switch_to_main,
+                &config,
+            )?;
         }
         Commands::GitStatus => {
             git_status(&config)?;
         }
         Commands::Cleanup { yes } => {
             cleanup_done_tasks(yes)?;
+        }
+        Commands::ConfigInit { path } => {
+            init_config_file(path)?;
         }
     }
 
@@ -1347,7 +1387,7 @@ fn format_pr_body(task: &Task, task_content: &str) -> String {
         body.push_str(&format!("**Project:** {}\n", project));
     }
 
-    body.push_str("\n");
+    body.push('\n');
 
     // Add task content (checklist, notes, etc.)
     if !task_content.trim().is_empty() {
@@ -1390,18 +1430,14 @@ fn create_github_pr(
     }
 
     // Add reviewers
-    let reviewers_list = reviewers.or_else(|| {
-        config.pr_default_reviewers.as_ref().map(|r| r.join(","))
-    });
+    let reviewers_list =
+        reviewers.or_else(|| config.pr_default_reviewers.as_ref().map(|r| r.join(",")));
     if let Some(ref reviewers_str) = reviewers_list {
         args.extend(&["--reviewer", reviewers_str]);
     }
 
-    // Add labels
-    let labels_list = labels.or_else(|| {
-        config.pr_default_labels.as_ref().map(|l| l.join(","))
-    });
-    if let Some(ref labels_str) = labels_list {
+    // Add labels (only if explicitly provided via command line)
+    if let Some(ref labels_str) = labels {
         args.extend(&["--label", labels_str]);
     }
 
@@ -1470,10 +1506,14 @@ fn git_done_branch(
     let commit_msg =
         message.unwrap_or_else(|| format!("feat: {} (task #{})", task.task.title, task_id));
 
-    // Add all changes and commit (including the task file update)
-    println!("📝 Committing changes...");
-    run_git_command(&["add", "."])?;
-    run_git_command(&["commit", "-m", &commit_msg])?;
+    // Add all changes and commit (only if there are changes)
+    if has_uncommitted_changes()? {
+        println!("📝 Committing changes...");
+        run_git_command(&["add", "."])?;
+        run_git_command(&["commit", "-m", &commit_msg])?;
+    } else {
+        println!("📝 No changes to commit");
+    }
 
     // Push the task branch to remote
     println!("🚀 Pushing task branch to remote...");
@@ -1666,5 +1706,37 @@ fn cleanup_done_tasks(yes: bool) -> Result<()> {
     }
 
     println!("✅ Cleaned up {} done task(s)", deleted_count);
+    Ok(())
+}
+
+fn init_config_file(path: Option<String>) -> Result<()> {
+    let config_path = path.unwrap_or_else(|| "./mdtasks.toml".to_string());
+    let expanded_path = shellexpand::tilde(&config_path).to_string();
+
+    if Path::new(&expanded_path).exists() {
+        println!("⚠️  Config file already exists: {}", expanded_path);
+        print!("❓ Overwrite? (y/N): ");
+        use std::io::{self, Write};
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+
+        if !input.trim().to_lowercase().starts_with('y') {
+            println!("❌ Config init cancelled");
+            return Ok(());
+        }
+    }
+
+    let config = Config::default();
+    let toml_content =
+        toml::to_string_pretty(&config).context("Failed to serialize config to TOML")?;
+
+    std::fs::write(&expanded_path, toml_content)
+        .context(format!("Failed to write config file: {}", expanded_path))?;
+
+    println!("✅ Created config file: {}", expanded_path);
+    println!("📝 Edit the file to customize your mdtasks configuration");
+
     Ok(())
 }
