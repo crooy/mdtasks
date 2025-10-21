@@ -1,5 +1,8 @@
 # Cursor Rules for mdtasks Project
 
+- use flake nix
+- always use mdtasks for tracking tasks and progress
+
 ## 🚫 CRITICAL: No TODO/FIXME Comments
 - **NEVER** create TODO/FIXME comments in code files
 - **ALWAYS** use `mdtasks add` to create tasks instead
