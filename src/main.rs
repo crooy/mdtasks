@@ -1487,7 +1487,7 @@ fn git_done_branch(
             &task.task,
             &task.content,
             &config.git,
-            draft,
+            draft || config.git.pr_draft,
             reviewers,
             labels,
         ) {
