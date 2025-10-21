@@ -58,10 +58,10 @@ check_project() {
 # Install mdtasks
 install_mdtasks() {
     log_info "Installing mdtasks..."
-    
+
     # Build and install using cargo
     cd "$PROJECT_DIR"
-    
+
     if cargo install --path . --force; then
         log_success "mdtasks installed successfully"
     else
@@ -75,11 +75,11 @@ verify_installation() {
     if command -v "$BINARY_NAME" &> /dev/null; then
         local version=$($BINARY_NAME --version 2>/dev/null || echo "unknown")
         log_success "mdtasks is installed and available: $version"
-        
+
         # Show where it's installed
         local binary_path=$(which "$BINARY_NAME")
         log_info "Installed at: $binary_path"
-        
+
         # Test basic functionality
         log_info "Testing basic functionality..."
         if $BINARY_NAME --help &> /dev/null; then
@@ -97,17 +97,17 @@ verify_installation() {
 check_path() {
     local cargo_bin_in_path=false
     local local_bin_in_path=false
-    
+
     # Check if cargo bin is in PATH
     if [[ ":$PATH:" == *":${CARGO_INSTALL_DIR}:"* ]]; then
         cargo_bin_in_path=true
     fi
-    
+
     # Check if local bin is in PATH
     if [[ ":$PATH:" == *":${INSTALL_DIR}:"* ]]; then
         local_bin_in_path=true
     fi
-    
+
     if [[ "$cargo_bin_in_path" == false && "$local_bin_in_path" == false ]]; then
         log_warning "Cargo bin directory may not be in your PATH"
         log_info "Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
@@ -125,8 +125,8 @@ show_usage() {
     echo "  $BINARY_NAME list                    # List all tasks"
     echo "  $BINARY_NAME add \"New task\"         # Add a new task"
     echo "  $BINARY_NAME start 1                 # Start working on task 1"
-    echo "  $BINARY_NAME checklist 1 \"Item\"     # Add checklist item"
-    echo "  $BINARY_NAME subtasks 1              # List subtasks"
+    echo "  $BINARY_NAME subtasks add 1 \"Item\"  # Add subtask"
+    echo "  $BINARY_NAME subtasks list 1         # List subtasks"
     echo "  $BINARY_NAME done 1                  # Mark task as done"
     echo ""
     log_info "For more help: $BINARY_NAME --help"
@@ -135,7 +135,7 @@ show_usage() {
 # Uninstall function
 uninstall() {
     log_info "Uninstalling mdtasks..."
-    
+
     if cargo uninstall mdtasks 2>/dev/null; then
         log_success "mdtasks uninstalled successfully"
     else
@@ -149,13 +149,13 @@ main() {
     echo "🚀 mdtasks installer"
     echo "==================="
     echo ""
-    
+
     # Handle uninstall flag
     if [[ "$1" == "--uninstall" ]] || [[ "$1" == "-u" ]]; then
         uninstall
         exit 0
     fi
-    
+
     # Handle help flag
     if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
         echo "Usage: $0 [options]"
@@ -166,7 +166,7 @@ main() {
         echo ""
         exit 0
     fi
-    
+
     # Installation process
     check_cargo
     check_project

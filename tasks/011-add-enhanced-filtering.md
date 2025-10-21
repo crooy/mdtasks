@@ -12,6 +12,19 @@ created: 2025-10-20
 ## Notes
 Add --project, --due, date ranges, and better search capabilities
 
+Updated documentation:
+
+✅ README.md:
+  - Updated Quick Start examples to use 'subtasks add' and 'subtasks list'
+  - Updated Basic Commands section with new subtasks subcommand
+  - Added dedicated 'Subtasks Management' section with complete examples
+  - Updated feature description to mention individual completion control
+
+✅ install.sh:
+  - Updated usage examples to show 'subtasks add' and 'subtasks list'
+  - Removed outdated 'checklist' command references
+
+All documentation now reflects the unified subtasks subcommand structure.
 Successfully refactored checklist/subtasks structure:
 
 ✅ REMOVED: 'checklist' command (redundant)
@@ -33,3 +46,5 @@ This eliminates confusion between checklist/subtasks and provides better granula
 - [ ] Convert subtasks to subcommand structure
 - [ ] Add individual subtask completion/incompletion
 - [ ] Update markdown section name to Subtasks
+- [ ] Update README.md examples
+- [ ] Update install script examples

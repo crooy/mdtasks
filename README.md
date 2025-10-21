@@ -15,7 +15,7 @@ Perfect for developers who want their tasks to be:
 ## Features
 
 - ✅ **Task Management**: Create, list, show, start, and complete tasks
-- ✅ **Subtasks**: Add checklist items and track subtask progress
+- ✅ **Subtasks**: Add subtasks and track progress with individual completion control
 - ✅ **Filtering**: Filter tasks by status, priority, and tags
 - ✅ **Markdown Storage**: Tasks stored as readable markdown files
 - ✅ **Git Integration**: Version control your tasks with git
@@ -33,11 +33,11 @@ mdtasks add "Learn mdtasks" --priority high
 mdtasks start 1
 
 # Add some subtasks
-mdtasks checklist 1 "Read the documentation"
-mdtasks checklist 1 "Try the examples"
+mdtasks subtasks add 1 "Read the documentation"
+mdtasks subtasks add 1 "Try the examples"
 
 # View your progress
-mdtasks subtasks 1
+mdtasks subtasks list 1
 
 # Mark as complete
 mdtasks done 1
@@ -98,18 +98,33 @@ mdtasks add "Implement new feature" --priority high --tags feature
 # Start working on a task
 mdtasks start 1
 
-# Add subtasks/checklist items
-mdtasks checklist 1 "Write tests"
-mdtasks checklist 1 "Update documentation"
+# Add subtasks
+mdtasks subtasks add 1 "Write tests"
+mdtasks subtasks add 1 "Update documentation"
 
 # View subtasks
-mdtasks subtasks 1
+mdtasks subtasks list 1
 
 # Mark task as done
 mdtasks done 1
 
 # Show task details
 mdtasks show 1
+```
+
+### Subtasks Management
+
+```bash
+# Add subtasks to a task
+mdtasks subtasks add 1 "Write unit tests"
+mdtasks subtasks add 1 "Update documentation"
+
+# List all subtasks for a task
+mdtasks subtasks list 1
+
+# Mark individual subtasks as complete/incomplete
+mdtasks subtasks complete 1 1    # Mark subtask #1 as complete
+mdtasks subtasks incomplete 1 2  # Mark subtask #2 as incomplete
 ```
 
 ### Filtering
