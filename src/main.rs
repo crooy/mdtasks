@@ -1527,7 +1527,7 @@ fn git_done_branch(
             &task.task,
             &task.content,
             &config.git,
-            draft,
+            draft || config.git.pr_draft,
             reviewers,
             labels,
         ) {
@@ -1708,7 +1708,6 @@ fn cleanup_done_tasks(yes: bool) -> Result<()> {
     println!("✅ Cleaned up {} done task(s)", deleted_count);
     Ok(())
 }
-
 fn init_config_file(path: Option<String>) -> Result<()> {
     let config_path = path.unwrap_or_else(|| "./mdtasks.toml".to_string());
     let expanded_path = shellexpand::tilde(&config_path).to_string();
