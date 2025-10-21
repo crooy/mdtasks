@@ -59,15 +59,22 @@ check_project() {
 install_mdtasks() {
     log_info "Installing mdtasks..."
 
-    # Build and install using cargo
+    # Build using cargo
     cd "$PROJECT_DIR"
 
-    if cargo install --path . --force; then
-        log_success "mdtasks installed successfully"
+    if cargo build --release; then
+        log_success "mdtasks built successfully"
     else
-        log_error "Failed to install mdtasks"
+        log_error "Failed to build mdtasks"
         exit 1
     fi
+
+    # Install to ~/.local/bin
+    mkdir -p "$INSTALL_DIR"
+    cp target/release/mdtasks "$INSTALL_DIR/"
+    chmod +x "$INSTALL_DIR/mdtasks"
+
+    log_success "mdtasks installed to $INSTALL_DIR"
 }
 
 # Check if installation was successful
@@ -95,23 +102,17 @@ verify_installation() {
 
 # Add to PATH if needed
 check_path() {
-    local cargo_bin_in_path=false
     local local_bin_in_path=false
-
-    # Check if cargo bin is in PATH
-    if [[ ":$PATH:" == *":${CARGO_INSTALL_DIR}:"* ]]; then
-        cargo_bin_in_path=true
-    fi
 
     # Check if local bin is in PATH
     if [[ ":$PATH:" == *":${INSTALL_DIR}:"* ]]; then
         local_bin_in_path=true
     fi
 
-    if [[ "$cargo_bin_in_path" == false && "$local_bin_in_path" == false ]]; then
-        log_warning "Cargo bin directory may not be in your PATH"
+    if [[ "$local_bin_in_path" == false ]]; then
+        log_warning "~/.local/bin may not be in your PATH"
         log_info "Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
-        echo "  export PATH=\"\$HOME/.cargo/bin:\$PATH\""
+        echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
         echo ""
         log_info "Then run: source ~/.bashrc (or ~/.zshrc)"
     fi
@@ -136,11 +137,17 @@ show_usage() {
 uninstall() {
     log_info "Uninstalling mdtasks..."
 
-    if cargo uninstall mdtasks 2>/dev/null; then
-        log_success "mdtasks uninstalled successfully"
+    # Remove from ~/.local/bin
+    if [[ -f "$INSTALL_DIR/mdtasks" ]]; then
+        rm "$INSTALL_DIR/mdtasks"
+        log_success "mdtasks removed from $INSTALL_DIR"
     else
-        log_warning "mdtasks may not have been installed via cargo"
-        log_info "You may need to manually remove the binary from your PATH"
+        log_warning "mdtasks not found in $INSTALL_DIR"
+    fi
+
+    # Also try cargo uninstall in case it was installed via cargo
+    if cargo uninstall mdtasks 2>/dev/null; then
+        log_success "mdtasks also removed from cargo installation"
     fi
 }
 

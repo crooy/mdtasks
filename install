@@ -73,23 +73,12 @@ else
 
     # Install
     echo "🔧 Installing mdtasks..."
-    if [[ "$OS" == "darwin" ]]; then
-        # On macOS, try to install to /usr/local/bin first, fallback to ~/.local/bin
-        if sudo mv mdtasks /usr/local/bin/ 2>/dev/null; then
-            echo "✅ Installed to /usr/local/bin/mdtasks"
-        else
-            mkdir -p ~/.local/bin
-            mv mdtasks ~/.local/bin/
-            echo "✅ Installed to ~/.local/bin/mdtasks"
-            echo "Add ~/.local/bin to your PATH if it's not already there"
-        fi
-    else
-        # On Linux, install to /usr/local/bin
-        sudo mv mdtasks /usr/local/bin/
-        echo "✅ Installed to /usr/local/bin/mdtasks"
-    fi
+    mkdir -p ~/.local/bin
+    mv mdtasks ~/.local/bin/
+    echo "✅ Installed to ~/.local/bin/mdtasks"
+    echo "Add ~/.local/bin to your PATH if it's not already there"
 
-    chmod +x /usr/local/bin/mdtasks 2>/dev/null || chmod +x ~/.local/bin/mdtasks
+    chmod +x ~/.local/bin/mdtasks
 fi
 
 # Cleanup

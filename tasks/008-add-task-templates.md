@@ -13,5 +13,5 @@ created: 2025-10-20
 Create task templates for common task types (bug-report, feature-request, etc.)
 
 ## Checklist
-- [ ] 
+- [x] 
 - [ ] Create template for bug reports
