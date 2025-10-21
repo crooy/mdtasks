@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-10-21
+
 ### Added
 - Support for both "## Checklist" and "## Subtasks" sections in task files
 - Automatic preference for "## Subtasks" section when both are present
