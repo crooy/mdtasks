@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Support for both "## Checklist" and "## Subtasks" sections in task files
+- Automatic preference for "## Subtasks" section when both are present
+- Backward compatibility with existing "## Checklist" sections
 - GitHub Actions CI/CD pipeline
 - Cross-platform builds for Linux and macOS
 - Universal installer with automatic OS/architecture detection
