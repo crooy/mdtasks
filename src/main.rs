@@ -1436,13 +1436,9 @@ fn create_github_pr(
         args.extend(&["--reviewer", reviewers_str]);
     }
 
-    // Add labels (skip if they might not exist)
-    let labels_list = labels.or_else(|| config.pr_default_labels.as_ref().map(|l| l.join(",")));
-    if let Some(ref labels_str) = labels_list {
-        // Only add labels if they're explicitly provided via command line
-        if labels.is_some() {
-            args.extend(&["--label", labels_str]);
-        }
+    // Add labels (only if explicitly provided via command line)
+    if let Some(ref labels_str) = labels {
+        args.extend(&["--label", labels_str]);
     }
 
     // Execute the command
