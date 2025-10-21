@@ -13,6 +13,12 @@ struct Config {
 #[derive(Debug, Serialize, Deserialize)]
 struct GitConfig {
     branch_prefix: String,
+    pr_enabled: bool,
+    pr_draft: bool,
+    pr_auto_assign: bool,
+    pr_switch_to_main: bool,
+    pr_default_reviewers: Option<Vec<String>>,
+    pr_default_labels: Option<Vec<String>>,
 }
 
 impl Default for Config {
@@ -20,6 +26,12 @@ impl Default for Config {
         Self {
             git: GitConfig {
                 branch_prefix: "feature/".to_string(),
+                pr_enabled: true,
+                pr_draft: false,
+                pr_auto_assign: true,
+                pr_switch_to_main: false,
+                pr_default_reviewers: None,
+                pr_default_labels: None,
             },
         }
     }
@@ -146,10 +158,30 @@ enum Commands {
         /// Task ID to create branch for
         id: String,
     },
-    /// Finish Git branch and merge to main
-    GitFinish {
+    /// Finish Git branch, create PR, and optionally merge to main
+    GitDone {
         /// Optional commit message (defaults to task title)
         message: Option<String>,
+        
+        /// Skip PR creation
+        #[arg(long)]
+        no_pr: bool,
+        
+        /// Create as draft PR
+        #[arg(long)]
+        draft: bool,
+        
+        /// Comma-separated list of reviewers
+        #[arg(long)]
+        reviewers: Option<String>,
+        
+        /// Comma-separated list of labels
+        #[arg(long)]
+        labels: Option<String>,
+        
+        /// Switch back to main after PR creation
+        #[arg(long)]
+        switch_to_main: bool,
     },
     /// Show Git status and current task
     GitStatus,
@@ -244,8 +276,15 @@ fn main() -> Result<()> {
         Commands::GitStart { id } => {
             git_start_branch(id, &config)?;
         }
-        Commands::GitFinish { message } => {
-            git_finish_branch(message, &config)?;
+        Commands::GitDone { 
+            message, 
+            no_pr, 
+            draft, 
+            reviewers, 
+            labels, 
+            switch_to_main 
+        } => {
+            git_done_branch(message, no_pr, draft, reviewers, labels, switch_to_main, &config)?;
         }
         Commands::GitStatus => {
             git_status(&config)?;
@@ -1277,7 +1316,122 @@ fn git_start_branch(task_id: String, config: &Config) -> Result<()> {
     Ok(())
 }
 
-fn git_finish_branch(message: Option<String>, config: &Config) -> Result<()> {
+fn is_gh_cli_available() -> Result<bool> {
+    let output = std::process::Command::new("gh")
+        .args(["--version"])
+        .output();
+    
+    match output {
+        Ok(output) => Ok(output.status.success()),
+        Err(_) => Ok(false),
+    }
+}
+
+fn format_pr_body(task: &Task, task_content: &str) -> String {
+    let mut body = String::new();
+    
+    // Add task description
+    body.push_str(&format!("## Task: {}\n\n", task.title));
+    
+    // Add task details
+    if let Some(ref status) = task.status {
+        body.push_str(&format!("**Status:** {}\n", status));
+    }
+    if let Some(ref priority) = task.priority {
+        body.push_str(&format!("**Priority:** {}\n", priority));
+    }
+    if let Some(ref tags) = task.tags {
+        body.push_str(&format!("**Tags:** {}\n", tags.join(", ")));
+    }
+    if let Some(ref project) = task.project {
+        body.push_str(&format!("**Project:** {}\n", project));
+    }
+    
+    body.push_str("\n");
+    
+    // Add task content (checklist, notes, etc.)
+    if !task_content.trim().is_empty() {
+        body.push_str("## Task Details\n\n");
+        body.push_str(task_content);
+    }
+    
+    body
+}
+
+fn create_github_pr(
+    _branch_name: &str,
+    task: &Task,
+    task_content: &str,
+    config: &GitConfig,
+    draft: bool,
+    reviewers: Option<String>,
+    labels: Option<String>,
+) -> Result<String> {
+    // Check if GitHub CLI is available
+    if !is_gh_cli_available()? {
+        return Err(anyhow::anyhow!(
+            "GitHub CLI (gh) is not installed. Please install it to create PRs automatically.\n\
+            Visit: https://cli.github.com/"
+        ));
+    }
+    
+    // Build PR title
+    let pr_title = format!("feat: {} (task #{})", task.title, task.id);
+    
+    // Build PR body
+    let pr_body = format_pr_body(task, task_content);
+    
+    // Build gh pr create command
+    let mut args = vec!["pr", "create", "--title", &pr_title, "--body", &pr_body];
+    
+    // Add draft flag if requested
+    if draft || config.pr_draft {
+        args.push("--draft");
+    }
+    
+    // Add reviewers
+    let reviewers_list = reviewers.or_else(|| {
+        config.pr_default_reviewers.as_ref().map(|r| r.join(","))
+    });
+    if let Some(ref reviewers_str) = reviewers_list {
+        args.extend(&["--reviewer", reviewers_str]);
+    }
+    
+    // Add labels
+    let labels_list = labels.or_else(|| {
+        config.pr_default_labels.as_ref().map(|l| l.join(","))
+    });
+    if let Some(ref labels_str) = labels_list {
+        args.extend(&["--label", labels_str]);
+    }
+    
+    // Execute the command
+    let output = std::process::Command::new("gh")
+        .args(&args)
+        .output()
+        .context("Failed to run gh pr create command")?;
+    
+    if !output.status.success() {
+        let error_msg = String::from_utf8_lossy(&output.stderr);
+        return Err(anyhow::anyhow!("Failed to create PR: {}", error_msg));
+    }
+    
+    // Extract PR URL from output
+    let output_str = String::from_utf8_lossy(&output.stdout);
+    let pr_url = output_str.trim().to_string();
+    
+    Ok(pr_url)
+}
+
+fn git_done_branch(
+    message: Option<String>,
+    no_pr: bool,
+    draft: bool,
+    reviewers: Option<String>,
+    labels: Option<String>,
+    switch_to_main: bool,
+    config: &Config,
+) -> Result<()> {
     // Check if we're in a git repository
     if !is_git_repo()? {
         return Err(anyhow::anyhow!("Not in a git repository"));
@@ -1325,11 +1479,51 @@ fn git_finish_branch(message: Option<String>, config: &Config) -> Result<()> {
     println!("🚀 Pushing task branch to remote...");
     run_git_command(&["push", "origin", &current_branch])?;
 
+    // Create PR if enabled and not skipped
+    let pr_url = if !no_pr && config.git.pr_enabled {
+        println!("🔗 Creating pull request...");
+        match create_github_pr(
+            &current_branch,
+            &task.task,
+            &task.content,
+            &config.git,
+            draft,
+            reviewers,
+            labels,
+        ) {
+            Ok(url) => {
+                println!("✅ Pull request created: {}", url);
+                Some(url)
+            }
+            Err(e) => {
+                println!("⚠️  Failed to create PR: {}", e);
+                None
+            }
+        }
+    } else if no_pr {
+        println!("⏭️  Skipping PR creation (--no-pr flag)");
+        None
+    } else {
+        println!("⏭️  PR creation disabled in config");
+        None
+    };
+
+    // Switch back to main if requested
+    if switch_to_main || config.git.pr_switch_to_main {
+        println!("🔄 Switching back to main branch...");
+        run_git_command(&["checkout", "main"])?;
+        println!("✅ Switched to main branch");
+    }
+
     println!(
         "🎉 Successfully finished task {}: {}",
         task_id, task.task.title
     );
     println!("✅ Changes pushed to remote repository");
+    
+    if let Some(url) = pr_url {
+        println!("🔗 Pull request: {}", url);
+    }
 
     Ok(())
 }
