@@ -5,4 +5,4 @@ pr_draft = false
 pr_auto_assign = true
 pr_switch_to_main = false
 pr_default_reviewers = ["crooy", "cursor"]
-pr_default_labels = ["enhancement", "feature"]
+pr_default_labels = ["enhancement"]
