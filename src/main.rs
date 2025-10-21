@@ -162,23 +162,23 @@ enum Commands {
     GitDone {
         /// Optional commit message (defaults to task title)
         message: Option<String>,
-        
+
         /// Skip PR creation
         #[arg(long)]
         no_pr: bool,
-        
+
         /// Create as draft PR
         #[arg(long)]
         draft: bool,
-        
+
         /// Comma-separated list of reviewers
         #[arg(long)]
         reviewers: Option<String>,
-        
+
         /// Comma-separated list of labels
         #[arg(long)]
         labels: Option<String>,
-        
+
         /// Switch back to main after PR creation
         #[arg(long)]
         switch_to_main: bool,
@@ -276,13 +276,13 @@ fn main() -> Result<()> {
         Commands::GitStart { id } => {
             git_start_branch(id, &config)?;
         }
-        Commands::GitDone { 
-            message, 
-            no_pr, 
-            draft, 
-            reviewers, 
-            labels, 
-            switch_to_main 
+        Commands::GitDone {
+            message,
+            no_pr,
+            draft,
+            reviewers,
+            labels,
+            switch_to_main
         } => {
             git_done_branch(message, no_pr, draft, reviewers, labels, switch_to_main, &config)?;
         }
@@ -1320,7 +1320,7 @@ fn is_gh_cli_available() -> Result<bool> {
     let output = std::process::Command::new("gh")
         .args(["--version"])
         .output();
-    
+
     match output {
         Ok(output) => Ok(output.status.success()),
         Err(_) => Ok(false),
@@ -1329,10 +1329,10 @@ fn is_gh_cli_available() -> Result<bool> {
 
 fn format_pr_body(task: &Task, task_content: &str) -> String {
     let mut body = String::new();
-    
+
     // Add task description
     body.push_str(&format!("## Task: {}\n\n", task.title));
-    
+
     // Add task details
     if let Some(ref status) = task.status {
         body.push_str(&format!("**Status:** {}\n", status));
@@ -1346,15 +1346,15 @@ fn format_pr_body(task: &Task, task_content: &str) -> String {
     if let Some(ref project) = task.project {
         body.push_str(&format!("**Project:** {}\n", project));
     }
-    
+
     body.push_str("\n");
-    
+
     // Add task content (checklist, notes, etc.)
     if !task_content.trim().is_empty() {
         body.push_str("## Task Details\n\n");
         body.push_str(task_content);
     }
-    
+
     body
 }
 
@@ -1374,21 +1374,21 @@ fn create_github_pr(
             Visit: https://cli.github.com/"
         ));
     }
-    
+
     // Build PR title
     let pr_title = format!("feat: {} (task #{})", task.title, task.id);
-    
+
     // Build PR body
     let pr_body = format_pr_body(task, task_content);
-    
+
     // Build gh pr create command
     let mut args = vec!["pr", "create", "--title", &pr_title, "--body", &pr_body];
-    
+
     // Add draft flag if requested
     if draft || config.pr_draft {
         args.push("--draft");
     }
-    
+
     // Add reviewers
     let reviewers_list = reviewers.or_else(|| {
         config.pr_default_reviewers.as_ref().map(|r| r.join(","))
@@ -1396,7 +1396,7 @@ fn create_github_pr(
     if let Some(ref reviewers_str) = reviewers_list {
         args.extend(&["--reviewer", reviewers_str]);
     }
-    
+
     // Add labels
     let labels_list = labels.or_else(|| {
         config.pr_default_labels.as_ref().map(|l| l.join(","))
@@ -1404,22 +1404,22 @@ fn create_github_pr(
     if let Some(ref labels_str) = labels_list {
         args.extend(&["--label", labels_str]);
     }
-    
+
     // Execute the command
     let output = std::process::Command::new("gh")
         .args(&args)
         .output()
         .context("Failed to run gh pr create command")?;
-    
+
     if !output.status.success() {
         let error_msg = String::from_utf8_lossy(&output.stderr);
         return Err(anyhow::anyhow!("Failed to create PR: {}", error_msg));
     }
-    
+
     // Extract PR URL from output
     let output_str = String::from_utf8_lossy(&output.stdout);
     let pr_url = output_str.trim().to_string();
-    
+
     Ok(pr_url)
 }
 
@@ -1520,7 +1520,7 @@ fn git_done_branch(
         task_id, task.task.title
     );
     println!("✅ Changes pushed to remote repository");
-    
+
     if let Some(url) = pr_url {
         println!("🔗 Pull request: {}", url);
     }
