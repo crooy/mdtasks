@@ -1510,10 +1510,14 @@ fn git_done_branch(
     let commit_msg =
         message.unwrap_or_else(|| format!("feat: {} (task #{})", task.task.title, task_id));
 
-    // Add all changes and commit (including the task file update)
-    println!("📝 Committing changes...");
-    run_git_command(&["add", "."])?;
-    run_git_command(&["commit", "-m", &commit_msg])?;
+    // Add all changes and commit (only if there are changes)
+    if has_uncommitted_changes()? {
+        println!("📝 Committing changes...");
+        run_git_command(&["add", "."])?;
+        run_git_command(&["commit", "-m", &commit_msg])?;
+    } else {
+        println!("📝 No changes to commit");
+    }
 
     // Push the task branch to remote
     println!("🚀 Pushing task branch to remote...");
